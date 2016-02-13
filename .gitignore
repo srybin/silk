@@ -1,0 +1,12 @@
+tpf.sdf
+tpf.opensdf
+ipch
+Debug
+x64
+*/*/Debug
+*/*/Release
+*/*/*.filters
+*/*.filters
+*/*/*.user
+*/*.user
+.vs
