@@ -2,12 +2,13 @@
 #include <atomic>
 #include <algorithm>
 #include "SpinWait.h"
+#include "HazardPointersUnit.h"
 
 namespace Parallel {
 	template<typename T>
 	class ConcurrentQueue {
 	public:
-		ConcurrentQueue() : _tail(new Segment()), _head(_tail.load(std::memory_order_relaxed)) {
+		ConcurrentQueue() : _tail(new Segment()), _head(_tail.load(std::memory_order_relaxed)), _hazardPointersUnit(new HazardPointersUnit(2)) {
 		}
 
 		void Enqueue(T value) {
@@ -15,7 +16,14 @@ namespace Parallel {
 				SpinWait spinWait;
 
 				Segment* tail = _tail.load(std::memory_order_acquire);
+				_hazardPointersUnit->Hazard(0, tail);
+				if (tail != _tail.load(std::memory_order_acquire)) {
+					_hazardPointersUnit->Unhazerd(0);
+					continue;
+				}
+
 				if (tail->High >= 31) {
+					_hazardPointersUnit->Unhazerd(0);
 					spinWait.SpinOnce();
 				} else {
 					int i = ++tail->High;
@@ -30,8 +38,10 @@ namespace Parallel {
 						_tail.store(tail->Next, std::memory_order_release);
 					}
 
-					if (i <= 31)
+					if (i <= 31) {
+						_hazardPointersUnit->Unhazerd(0);
 						break;
+					}
 				}
 			}
 		}
@@ -39,12 +49,30 @@ namespace Parallel {
 		bool TryDequeue(T& value) {
 			while (true) {
 				Segment* head = _head.load(std::memory_order_acquire);
+				_hazardPointersUnit->Hazard(0, head);
+				if (head != _head.load(std::memory_order_acquire)) {
+					_hazardPointersUnit->Unhazerd(0);
+					continue;
+				}
 
 				int low = (std::min)(head->Low.load(std::memory_order_relaxed), 32);
 				int high = (std::min)(head->High.load(std::memory_order_acquire), 31);
 
-				if (low > high && head->Next.load(std::memory_order_relaxed) == nullptr)
+				Segment* next = head->Next.load(std::memory_order_acquire);
+				_hazardPointersUnit->Hazard(1, next);
+				if (next != head->Next.load(std::memory_order_acquire)) {
+					_hazardPointersUnit->Unhazerd(0);
+					_hazardPointersUnit->Unhazerd(1);
+					continue;
+				}
+
+				if (low > high && next == nullptr) {
+					_hazardPointersUnit->Unhazerd(0);
+					_hazardPointersUnit->Unhazerd(1);
 					return false;
+				}
+
+				_hazardPointersUnit->Unhazerd(1);
 
 				SpinWait spinWait1;
 
@@ -65,15 +93,33 @@ namespace Parallel {
 							SpinWait spinWait3;
 
 							Segment* newSegment;
-							while ((newSegment = head->Next.load(std::memory_order_relaxed)) == nullptr)
-								spinWait3.SpinOnce();
+							do {
+								newSegment = head->Next.load(std::memory_order_acquire);;
+								_hazardPointersUnit->Hazard(1, newSegment);
+								if (newSegment != head->Next.load(std::memory_order_acquire)) {
+									_hazardPointersUnit->Unhazerd(1);
+								}
+
+								if (newSegment == nullptr) {
+									spinWait3.SpinOnce();
+								} else {
+									break;
+								}
+							} while (true);
 
 							_head.store(newSegment, std::memory_order_release);
+							_hazardPointersUnit->Unhazerd(0);
+							_hazardPointersUnit->Unhazerd(1);
+							_hazardPointersUnit->Retire(head);
 						}
+
+						_hazardPointersUnit->Unhazerd(0);
 
 						return true;
 					}
 				}
+
+				_hazardPointersUnit->Unhazerd(0);
 			}
 		}
 
@@ -88,5 +134,6 @@ namespace Parallel {
 
 		std::atomic<Segment*> _tail;
 		std::atomic<Segment*> _head;
+		HazardPointersUnit* _hazardPointersUnit;
 	};
 }

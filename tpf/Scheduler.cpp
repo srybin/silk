@@ -103,6 +103,9 @@ void Scheduler::Compute(Task* task) {
 
 				if (newC == nullptr && continuation != nullptr) {
 					task = c;
+				} else if (c != newC) {
+					delete c;
+					c = nullptr;
 				}
 
 				c = newC;
@@ -114,6 +117,7 @@ void Scheduler::Compute(Task* task) {
 		}
 
 		continuation = task->Continuation();
+		delete task;
 		task = continuation != nullptr && continuation->DecrementPendingCount() <= 0 ? continuation : nullptr;
 	} while (task != nullptr);
 }
