@@ -97,7 +97,7 @@ void Scheduler::Compute(Task* task) {
 			Task* newC = nullptr;
 			while (c != nullptr && !c->IsCanceled()) {
 				c->IsRecyclable(false);
-				_currentTasks[std::this_thread::get_id()] = task;
+				_currentTasks[std::this_thread::get_id()] = c;
 				newC = c->Compute();
 				continuation = c->Continuation();
 
