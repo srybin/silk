@@ -11,7 +11,7 @@ IoWorker::IoWorker(IoQueue& ioQueue, Sync* sync) : Worker(sync), _ioQueue(ioQueu
 void IoWorker::Execute() {
 	CompletionContainer c;
 	while (true) {
-		if (_ioQueue.TryDequeue(c)) {
+		if (_ioQueue.TryDequeue(c) && c.Continuation != nullptr) {
 			Scheduler::Instance()->Spawn(c.Continuation, c.ThreadId);
 		}
 	}
