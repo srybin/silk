@@ -75,13 +75,11 @@ namespace Parallel {
 	protected:
 		void Spawn(Task* task);
 
+		void Recycle();
+
 		void AsContinuation(Task* task) {
 			task->Continuation(this->Continuation());
 			this->Continuation(nullptr);
-		}
-
-		void Recycle() {
-			_isRecyclable.store(true, std::memory_order_release);
 		}
 
 		void RecycleAsChildOf(Task* task) {

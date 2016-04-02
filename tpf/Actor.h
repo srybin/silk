@@ -8,6 +8,8 @@ namespace Parallel {
 
 	class Actor : public Task {
 	public:
+		Actor(int size = 1024);
+
 		Task* Compute() override;
 
 		virtual void Start();
@@ -28,7 +30,7 @@ namespace Parallel {
 	private:
 		bool SwitchStatus(ActorStatus from, ActorStatus to);
 
-		ConcurrentQueue<void*> _queue;
+		ConcurrentQueue<void*>* _queue;
 		std::atomic<ActorStatus> _status{ ActorStatus::Wait };
 	};
 
