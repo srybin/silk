@@ -1,13 +1,18 @@
 #include "Actor.h"
+#include "SpawnAndWait.h"
 
 using namespace Parallel;
+
+Actor::Actor(int size) : _queue(new ConcurrentQueue<void*>(size)) {
+}
 
 Task* Actor::Compute() {
 	while (true) {
 		while (true) {
 			if (SwitchStatus(ActorStatus::Start, ActorStatus::Run) && !IsCanceled()) {
 				Run();
-			} else {
+			}
+			else {
 				break;
 			}
 		}
@@ -28,12 +33,12 @@ Task* Actor::Compute() {
 
 void Actor::Start() {
 	if (!IsCanceled() && CanSpawn()) {
-		Scheduler::Instance()->Spawn(this);
+		Parallel::Spawn(this);
 	}
 }
 
 ConcurrentQueue<void*>& Actor::Queue() {
-	return _queue;
+	return *_queue;
 }
 
 ActorStatus Actor::Status(std::memory_order memoryOrder) {
@@ -42,7 +47,9 @@ ActorStatus Actor::Status(std::memory_order memoryOrder) {
 
 void Actor::Send(std::string endPoint, void* message, bool isSpawnReceiver) {
 	Actor* actor = Actors[endPoint];
-	actor->_queue.Enqueue(message);
+	if (!actor->_queue->TryEnqueue(message)) {
+		throw std::exception("Queue is full.");
+	}
 
 	if (isSpawnReceiver) {
 		actor->Start();
@@ -51,7 +58,7 @@ void Actor::Send(std::string endPoint, void* message, bool isSpawnReceiver) {
 
 void* Actor::Receive() {
 	void* value;
-	return _queue.TryDequeue(value) ? value : nullptr;
+	return _queue->TryDequeue(value) ? value : nullptr;
 }
 
 bool Actor::CanSpawn() {

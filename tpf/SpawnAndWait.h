@@ -11,6 +11,10 @@ namespace Parallel {
 		Spawn(new FunctionTask(func, token));
 	}
 
+	inline void InitializeScheduler(int queuesSize) {
+		Scheduler::Instance(queuesSize);
+	}
+
 	inline void Wait(Task* task) {
 		Scheduler::Instance()->Wait(task);
 	}

@@ -1,139 +1,71 @@
 #pragma once
 #include <atomic>
-#include <algorithm>
 #include "SpinWait.h"
-#include "HazardPointersUnit.h"
 
 namespace Parallel {
 	template<typename T>
 	class ConcurrentQueue {
 	public:
-		ConcurrentQueue() : _tail(new Segment()), _head(_tail.load(std::memory_order_relaxed)), _hazardPointersUnit(new HazardPointersUnit(2)) {
+		ConcurrentQueue(int size) : _size(size), _tail(0), _head(0), _buffer(new std::atomic<T>[size]), _commits(new std::atomic<bool>[size]) {
+			for (int i = 0; i < size; ++i) {
+				_buffer[i].store(nullptr, std::memory_order_relaxed);
+				_commits[i].store(false, std::memory_order_relaxed);
+			}
 		}
 
-		void Enqueue(T value) {
+		bool TryEnqueue(T value) {
+			SpinWait spinWait;
 			while (true) {
-				SpinWait spinWait;
+				int tail = _tail.load(std::memory_order_acquire);
+				int nextTail = (tail + 1) % _size;
 
-				Segment* tail = _tail.load(std::memory_order_acquire);
-				_hazardPointersUnit->Hazard(0, tail);
-				if (tail != _tail.load(std::memory_order_acquire)) {
-					_hazardPointersUnit->Unhazerd(0);
-					continue;
+				if (nextTail != _head.load(std::memory_order_acquire)) {
+					if (!_tail.compare_exchange_strong(tail, nextTail, std::memory_order_release)) {
+						spinWait.SpinOnce();
+						continue;
+					}
+
+					SpinWait spinWait2;
+					while (_commits[tail].load(std::memory_order_acquire))
+						spinWait2.SpinOnce();
+
+					_buffer[tail].store(value, std::memory_order_relaxed);
+					_commits[tail].store(true, std::memory_order_release);
+					return true;
 				}
 
-				if (tail->High >= 31) {
-					_hazardPointersUnit->Unhazerd(0);
-					spinWait.SpinOnce();
-				} else {
-					int i = ++tail->High;
-
-					if (i <= 31) {
-						tail->Buffer[i].store(value, std::memory_order_relaxed);
-						tail->Commits[i].store(true, std::memory_order_release);
-					}
-
-					if (i == 31) {
-						tail->Next.store(new Segment(), std::memory_order_relaxed);
-						_tail.store(tail->Next, std::memory_order_release);
-					}
-
-					if (i <= 31) {
-						_hazardPointersUnit->Unhazerd(0);
-						break;
-					}
-				}
+				return false;
 			}
 		}
 
 		bool TryDequeue(T& value) {
+			SpinWait spinWait;
 			while (true) {
-				Segment* head = _head.load(std::memory_order_acquire);
-				_hazardPointersUnit->Hazard(0, head);
-				if (head != _head.load(std::memory_order_acquire)) {
-					_hazardPointersUnit->Unhazerd(0);
-					continue;
-				}
-
-				int low = (std::min)(head->Low.load(std::memory_order_relaxed), 32);
-				int high = (std::min)(head->High.load(std::memory_order_acquire), 31);
-
-				Segment* next = head->Next.load(std::memory_order_acquire);
-				_hazardPointersUnit->Hazard(1, next);
-				if (next != head->Next.load(std::memory_order_acquire)) {
-					_hazardPointersUnit->Unhazerd(0);
-					_hazardPointersUnit->Unhazerd(1);
-					continue;
-				}
-
-				if (low > high && next == nullptr) {
-					_hazardPointersUnit->Unhazerd(0);
-					_hazardPointersUnit->Unhazerd(1);
+				int head = _head.load(std::memory_order_acquire);
+				if (head == _tail.load(std::memory_order_acquire)) {
 					return false;
 				}
 
-				_hazardPointersUnit->Unhazerd(1);
-
-				SpinWait spinWait1;
-
-				for (; low <= high; high = (std::min)(head->High.load(std::memory_order_relaxed), 31)) {
-					if (!head->Low.compare_exchange_strong(low, low + 1, std::memory_order_release, std::memory_order_acquire)) {
-						spinWait1.SpinOnce();
-
-						low = (std::min)(head->Low.load(std::memory_order_relaxed), 32);
-					} else {
-						SpinWait spinWait2;
-
-						while (!head->Commits[low].load(std::memory_order_acquire))
-							spinWait2.SpinOnce();
-
-						value = head->Buffer[low].load(std::memory_order_acquire);
-
-						if (low + 1 >= 32) {
-							SpinWait spinWait3;
-
-							Segment* newSegment;
-							do {
-								newSegment = head->Next.load(std::memory_order_acquire);;
-								_hazardPointersUnit->Hazard(1, newSegment);
-								if (newSegment != head->Next.load(std::memory_order_acquire)) {
-									_hazardPointersUnit->Unhazerd(1);
-								}
-
-								if (newSegment == nullptr) {
-									spinWait3.SpinOnce();
-								} else {
-									break;
-								}
-							} while (true);
-
-							_head.store(newSegment, std::memory_order_release);
-							_hazardPointersUnit->Unhazerd(0);
-							_hazardPointersUnit->Unhazerd(1);
-							_hazardPointersUnit->Retire(head);
-						}
-
-						_hazardPointersUnit->Unhazerd(0);
-
-						return true;
-					}
+				if (!_head.compare_exchange_strong(head, (head + 1) % _size, std::memory_order_release)) {
+					spinWait.SpinOnce();
+					continue;
 				}
 
-				_hazardPointersUnit->Unhazerd(0);
+				SpinWait spinWait2;
+				while (!_commits[head].load(std::memory_order_acquire))
+					spinWait2.SpinOnce();
+
+				value = _buffer[head].load(std::memory_order_relaxed);
+				_commits[head].store(false, std::memory_order_release);
+				return true;
 			}
 		}
 
 	private:
-		struct Segment {
-			std::atomic<int> Low;
-			std::atomic<int> High = -1;
-			std::atomic<T> Buffer[32];
-			std::atomic<bool> Commits[32];
-			std::atomic<Segment*> Next;
-		};
-
-		std::atomic<Segment*> _tail;
-		std::atomic<Segment*> _head;
-		HazardPointersUnit* _hazardPointersUnit;
+		int _size;
+		std::atomic<int> _tail;
+		std::atomic<int> _head;
+		std::atomic<T>* _buffer;
+		std::atomic<bool>* _commits;
 	};
 }
