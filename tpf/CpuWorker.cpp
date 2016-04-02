@@ -20,15 +20,14 @@ void CpuWorker::Execute() {
 		}
 
 		if (task != nullptr) {
+			_waitCount = 0;
 			_scheduler->Compute(task);
 		} else {
-			task = _scheduler->FetchTaskFromLocalQueues(std::this_thread::get_id());
-
-			if (task != nullptr) {
-				_scheduler->Compute(task);
-			} else {
-				_sync->Wait();
+			if (_waitCount < 20) {
+				_waitCount++;
+				continue;
 			}
+			_sync->Wait();
 		}
 	}
 }

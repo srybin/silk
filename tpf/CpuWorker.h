@@ -9,7 +9,9 @@ namespace Parallel {
 		CpuWorker(Scheduler* scheduler, Sync* sync);
 
 		void Execute() override;
+
 	private:
+		int _waitCount = 0;
 		Scheduler* _scheduler;
 	};
 }
