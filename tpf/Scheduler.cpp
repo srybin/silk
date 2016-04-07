@@ -103,7 +103,6 @@ void Scheduler::Compute(Task* task) {
 			CurrentTask* current = _currentTasks[std::this_thread::get_id()];
 			current->Task = task;
 			current->IsRecyclable = false;
-			task->IsRecyclable(false);
 
 			Task* c = task->Compute();
 
@@ -144,7 +143,6 @@ void Task::Spawn(Task* task) {
 }
 
 void Task::Recycle() {
-	_isRecyclable.store(true, std::memory_order_release);
 	Scheduler::Instance()->FetchCurrentTask(std::this_thread::get_id())->IsRecyclable = true;
 }
 
