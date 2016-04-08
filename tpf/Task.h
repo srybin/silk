@@ -5,7 +5,7 @@
 namespace Parallel {
 	class Task {
 	public:
-		Task() : _isRecyclable(false), _pendingCount(0), _continuation(nullptr), _cancellationToken(nullptr) {
+		Task() : _pendingCount(0), _continuation(nullptr), _cancellationToken(nullptr) {
 		}
 
 		virtual ~Task() {
@@ -35,14 +35,6 @@ namespace Parallel {
 
 		int IncrementPendingCount(std::memory_order memoryOrder = std::memory_order_acquire) {
 			return _pendingCount.fetch_add(1, memoryOrder) + 1;
-		}
-
-		bool IsRecyclable(std::memory_order memoryOrder = std::memory_order_acquire) {
-			return _isRecyclable.load(memoryOrder);
-		}
-
-		void IsRecyclable(bool value, std::memory_order memoryOrder = std::memory_order_release) {
-			_isRecyclable.store(value, memoryOrder);
 		}
 
 		bool IsCanceled() {
@@ -75,13 +67,11 @@ namespace Parallel {
 	protected:
 		void Spawn(Task* task);
 
+		void Recycle();
+
 		void AsContinuation(Task* task) {
 			task->Continuation(this->Continuation());
 			this->Continuation(nullptr);
-		}
-
-		void Recycle() {
-			_isRecyclable.store(true, std::memory_order_release);
 		}
 
 		void RecycleAsChildOf(Task* task) {
@@ -90,7 +80,6 @@ namespace Parallel {
 		}
 
 	private:
-		std::atomic<bool> _isRecyclable;
 		std::atomic<int> _pendingCount;
 		std::atomic<Task*> _continuation;
 		std::atomic<Ct*> _cancellationToken;

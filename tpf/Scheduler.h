@@ -10,16 +10,21 @@
 #include "QueuesContainer.h"
 
 namespace Parallel {
+	struct CurrentTask {
+		Task* Task;
+		bool IsRecyclable;
+	};
+
 	class Scheduler {
 	public:
-		Scheduler();
+		Scheduler(int queuesSize);
 
-		static Scheduler* Instance() {
+		static Scheduler* Instance(int queuesSize = 1024) {
 			if (_scheduler == nullptr) {
 				std::lock_guard<std::mutex> locker(_lock);
 
 				if (_scheduler == nullptr) {
-					_scheduler = new Scheduler();
+					_scheduler = new Scheduler(queuesSize);
 				}
 			}
 
@@ -44,7 +49,7 @@ namespace Parallel {
 
 		void EnqueueInIoQueue(void* io, Task* continuation);
 
-		Task* FetchCurrentTask(std::thread::id currentThreadId);
+		CurrentTask* FetchCurrentTask(std::thread::id currentThreadId);
 
 	private:
 		int _cores;
@@ -55,7 +60,7 @@ namespace Parallel {
 		std::vector<IoWorker*> _ioWorkers;
 		std::vector<CpuWorker*> _cpuWorkers;
 		std::atomic<int> _currentWorker = -1;
-		std::unordered_map<std::thread::id, Task*> _currentTasks;
+		std::unordered_map<std::thread::id, CurrentTask*> _currentTasks;
 		std::unordered_map<std::thread::id, QueuesContainer*> _queues;
 	};
 }

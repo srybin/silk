@@ -4,7 +4,7 @@
 
 namespace Parallel {
 	struct QueuesContainer {
-		ConcurrentQueue<Task*> InternalQueue;
-		ConcurrentQueue<Task*> ExternalQueue;
+		ConcurrentQueue<Task*>* InternalQueue;
+		ConcurrentQueue<Task*>* ExternalQueue;
 	};
 }
