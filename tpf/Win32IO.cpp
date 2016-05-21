@@ -1,3 +1,4 @@
+#include <winsock2.h>
 #include "Win32IO.h"
 #include "IO.h"
 #include "windows.h"
@@ -56,4 +57,24 @@ void Parallel::AppendToFileAsync(char* path, void* buffer, int bufferSize, Task*
 	OVERLAPPED o = {};
 	WriteFile(f, buffer, bufferSize, NULL, &o);
 	CloseHandle(f);
+}
+
+void Parallel::ReceiveAsync(void* socket, void* buffer, int bufferSize, Task* continuation) {
+	Scheduler::Instance()->EnqueueInIoQueue(socket, continuation);
+	WSABUF wsabuf;
+	wsabuf.len = bufferSize;
+	wsabuf.buf = (char*)buffer;
+	OVERLAPPED o = {};
+	DWORD dwFlags = 0, dwBytes = 0;
+	WSARecv((SOCKET)socket, &wsabuf, 1, &dwBytes, &dwFlags, &o, NULL);
+}
+
+void Parallel::SendAsync(void* socket, void* buffer, int bufferSize, Task* continuation) {
+	Scheduler::Instance()->EnqueueInIoQueue(socket, continuation);
+	WSABUF wsabuf;
+	wsabuf.len = bufferSize;
+	wsabuf.buf = (char*)buffer;
+	OVERLAPPED o = {};
+	DWORD dwFlags = 0, dwBytes = 0;
+	WSASend((SOCKET)socket, &wsabuf, 1, &dwBytes, dwFlags, &o, NULL);
 }
