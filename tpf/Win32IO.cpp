@@ -51,7 +51,7 @@ void Parallel::WriteFileAsync(char* path, void* buffer, int bufferSize, Task* co
 }
 
 void Parallel::AppendToFileAsync(char* path, void* buffer, int bufferSize, Task* continuation) {
-	HANDLE f = CreateFileA(path, FILE_APPEND_DATA, 0, 0, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+	HANDLE f = CreateFileA(path, FILE_APPEND_DATA, 0, 0, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED, NULL);
 	Scheduler::Instance()->EnqueueInIoQueue(f, continuation);
 	OVERLAPPED o = {};
 	WriteFile(f, buffer, bufferSize, NULL, &o);
