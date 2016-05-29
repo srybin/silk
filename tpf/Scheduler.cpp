@@ -14,6 +14,9 @@ Scheduler::Scheduler(int queuesSize)
 	, _ioWorkers(std::vector<IoWorker*>())
 	, _cpuWorkers(std::vector<CpuWorker*>())
 {
+	_queues.reserve( _cores );
+	_cpuWorkers.reserve( _cores );
+
 	for (int i = 0; i < _cores; i++) {
 		QueuesContainer* queues = new QueuesContainer( queuesSize );
 		CpuWorker* worker = new CpuWorker(this, _syncForWorkers);
