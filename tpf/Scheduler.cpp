@@ -95,15 +95,17 @@ Task* Scheduler::StealTaskFromOtherWorkers(std::function<ConcurrentQueue<Task*>*
 
 void Scheduler::Compute(Task* task) {
 	Task* continuation = nullptr;
+	std::thread::id currentThreadId = std::this_thread::get_id();
+
 	do {
 		if (!task->IsCanceled()) {
-			CurrentTask* current = _currentTasks[std::this_thread::get_id()];
+			CurrentTask* current = _currentTasks[currentThreadId];
 			current->Task = task;
 			current->IsRecyclable = false;
 
 			Task* c = task->Compute();
 
-			if (!_currentTasks[std::this_thread::get_id()]->IsRecyclable && task->PendingCount() == 0) {
+			if (!_currentTasks[currentThreadId]->IsRecyclable && task->PendingCount() == 0) {
 				if (task->Continuation() != nullptr) {
 					continuation = task->Continuation();
 				}
