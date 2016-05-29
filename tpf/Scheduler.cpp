@@ -15,10 +15,7 @@ Scheduler::Scheduler(int queuesSize)
 	, _cpuWorkers(std::vector<CpuWorker*>())
 {
 	for (int i = 0; i < _cores; i++) {
-		QueuesContainer* queues = new QueuesContainer();
-		queues->InternalQueue = new ConcurrentQueue<Task*>(queuesSize);
-		queues->ExternalQueue = new ConcurrentQueue<Task*>(queuesSize);
-
+		QueuesContainer* queues = new QueuesContainer( queuesSize );
 		CpuWorker* worker = new CpuWorker(this, _syncForWorkers);
 		_queues.insert(make_pair(worker->ThreadId(), queues));
 		_cpuWorkers.push_back(worker);
@@ -37,7 +34,7 @@ void Scheduler::Spawn(Task* task) {
 		++_currentWorker;
 	}
 
-	if (!_queues[_cpuWorkers[_currentWorker]->ThreadId()]->ExternalQueue->TryEnqueue(task)) {
+	if (!_queues[_cpuWorkers[_currentWorker]->ThreadId()]->ExternalQueue.TryEnqueue(task)) {
 		throw std::exception("Queue is full.");
 	}
 
@@ -50,7 +47,7 @@ void Scheduler::Spawn(Task* task, std::thread::id threadId) {
 	if (i == _queues.end()) {
 		Spawn(task);
 	} else {
-		if (!i->second->InternalQueue->TryEnqueue(task)) {
+		if (!i->second->InternalQueue.TryEnqueue(task)) {
 			throw std::exception("Queue is full.");
 		}
 
@@ -69,25 +66,25 @@ void Scheduler::Wait(Task* task) {
 
 Task* Scheduler::FetchTaskFromLocalQueues(std::thread::id currentThreadId) {
 	Task* task;
-	if (_queues[currentThreadId]->InternalQueue->TryDequeue(task) || _queues[currentThreadId]->ExternalQueue->TryDequeue(task)) {
+	if (_queues[currentThreadId]->InternalQueue.TryDequeue(task) || _queues[currentThreadId]->ExternalQueue.TryDequeue(task)) {
 		return task;
 	}
 	return nullptr;
 }
 
 Task* Scheduler::StealTaskFromInternalQueueOtherWorkers(std::thread::id currentThreadId) {
-	return StealTaskFromOtherWorkers([&](std::thread::id id) { return _queues[id]->InternalQueue; }, currentThreadId);
+	return StealTaskFromOtherWorkers([&](std::thread::id id) { return &_queues[id]->InternalQueue; }, currentThreadId);
 }
 
 Task* Scheduler::StealTaskFromExternalQueueOtherWorkers(std::thread::id currentThreadId) {
-	return StealTaskFromOtherWorkers([&](std::thread::id id) { return _queues[id]->ExternalQueue; }, currentThreadId);
+	return StealTaskFromOtherWorkers([&](std::thread::id id) { return &_queues[id]->ExternalQueue; }, currentThreadId);
 }
 
 Task* Scheduler::StealTaskFromOtherWorkers(std::function<ConcurrentQueue<Task*>*(std::thread::id)> queue, std::thread::id currentThreadId) {
 	Task* task;
 	for (std::unordered_map<std::thread::id, QueuesContainer*>::iterator it = _queues.begin(); it != _queues.end(); ++it) {
 		if (it->first != currentThreadId) {
-			if (queue(it->first)->TryDequeue(task)) {
+			if (queue( it->first )->TryDequeue( task )) {
 				return task;
 			}
 		}
