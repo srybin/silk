@@ -6,11 +6,7 @@ namespace Parallel {
 	template<typename T>
 	class ConcurrentQueue {
 	public:
-		ConcurrentQueue(int size) : _size(size), _tail(0), _head(0), _buffer(new std::atomic<T>[size]), _commits(new std::atomic<bool>[size]) {
-			for (int i = 0; i < size; ++i) {
-				_buffer[i].store(nullptr, std::memory_order_relaxed);
-				_commits[i].store(false, std::memory_order_relaxed);
-			}
+		ConcurrentQueue(int size) : _size(size), _tail(0), _head(0), _buffer(new AtomicBufferWithIndicator[size]) {
 		}
 
 		bool TryEnqueue(T value) {
@@ -26,11 +22,12 @@ namespace Parallel {
 					}
 
 					SpinWait spinWait2;
-					while (_commits[tail].load(std::memory_order_acquire))
+					AtomicBufferWithIndicator& buffer = _buffer[tail];
+					while (buffer.isCommited.load(std::memory_order_acquire))
 						spinWait2.SpinOnce();
 
-					_buffer[tail].store(value, std::memory_order_relaxed);
-					_commits[tail].store(true, std::memory_order_release);
+					buffer.value = value;
+					buffer.isCommited.store(true, std::memory_order_release);
 					return true;
 				}
 
@@ -52,20 +49,27 @@ namespace Parallel {
 				}
 
 				SpinWait spinWait2;
-				while (!_commits[head].load(std::memory_order_acquire))
+				AtomicBufferWithIndicator& buffer = _buffer[head];
+				while (!buffer.isCommited.load(std::memory_order_acquire))
 					spinWait2.SpinOnce();
 
-				value = _buffer[head].load(std::memory_order_relaxed);
-				_commits[head].store(false, std::memory_order_release);
+				value = buffer.value;
+				buffer.isCommited.store(false, std::memory_order_release);
+
 				return true;
 			}
 		}
 
 	private:
+		__declspec(align(64)) struct AtomicBufferWithIndicator
+		{
+			T value;
+			std::atomic<bool> isCommited;
+		};
+
 		int _size;
 		std::atomic<int> _tail;
 		std::atomic<int> _head;
-		std::atomic<T>* _buffer;
-		std::atomic<bool>* _commits;
+		AtomicBufferWithIndicator* _buffer;
 	};
 }
