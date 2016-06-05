@@ -1,12 +1,15 @@
 #pragma once
 #include <atomic>
 #include "SpinWait.h"
+#include <assert.h>
 
 namespace Parallel {
 	template<typename T>
 	class ConcurrentQueue {
 	public:
-		ConcurrentQueue(int size) : _size(size), _tail(0), _head(0), _buffer(new AtomicBufferWithIndicator[size]) {
+		ConcurrentQueue(int size) : _size(size), _tail(0), _head(0) {
+			assert( size > 0 );
+			_buffer = new AtomicBufferWithIndicator[size];
 		}
 
 		bool TryEnqueue(T value) {
