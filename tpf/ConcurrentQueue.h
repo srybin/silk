@@ -61,7 +61,7 @@ namespace Parallel {
 		}
 
 	private:
-		__declspec(align(64)) struct AtomicBufferWithIndicator
+		struct AtomicBufferWithIndicator
 		{
 			T value;
 			std::atomic<bool> isCommited;
