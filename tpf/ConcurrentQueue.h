@@ -12,6 +12,10 @@ namespace Parallel {
 			_buffer = new AtomicBufferWithIndicator[size];
 		}
 
+		~ConcurrentQueue() {
+			delete[] _buffer;
+		}
+
 		bool TryEnqueue(T value) {
 			SpinWait spinWait;
 			while (true) {
