@@ -5,7 +5,7 @@
 namespace Parallel {
 	class Task {
 	public:
-		Task() : _pendingCount(0), _continuation(nullptr), _cancellationToken(nullptr) {
+		Task() : _continuation(nullptr), _cancellationToken(nullptr), _pendingCount(0) {
 		}
 
 		virtual ~Task() {
@@ -13,12 +13,12 @@ namespace Parallel {
 
 		virtual Task* Compute() = 0;
 
-		Task* Continuation(std::memory_order memoryOrder = std::memory_order_acquire) {
-			return _continuation.load(memoryOrder);
+		Task* Continuation() {
+			return _continuation;
 		}
 
-		void Continuation(Task* task, std::memory_order memoryOrder = std::memory_order_release) {
-			_continuation.store(task, memoryOrder);
+		void Continuation(Task* task) {
+			_continuation = task;
 		}
 
 		void PendingCount(int count, std::memory_order memoryOrder = std::memory_order_release) {
@@ -37,29 +37,29 @@ namespace Parallel {
 			return _pendingCount.fetch_add(1, memoryOrder) + 1;
 		}
 
-		bool IsCanceled() {
-			Ct* token = _cancellationToken.load(std::memory_order_acquire);
+		bool IsCanceled(std::memory_order memoryOrder = std::memory_order_acquire) {
+			Ct* token = _cancellationToken;
 
 			if (token == nullptr) {
 				return false;
 			}
 
-			return token->IsCanceled();
+			return token->IsCanceled(memoryOrder);
 		}
 
-		void Cancel() {
-			Ct* token = _cancellationToken.load(std::memory_order_acquire);
+		void Cancel(std::memory_order memoryOrder = std::memory_order_release) {
+			Ct* token = _cancellationToken;
 			if (token != nullptr) {
-				token->Cancel();
+				token->Cancel(memoryOrder);
 			}
 		}
 
-		void CancellationToken(Ct* token, std::memory_order memoryOrder = std::memory_order_release) {
-			_cancellationToken.store(token, memoryOrder);
+		void CancellationToken(Ct* token) {
+			_cancellationToken = token;
 		}
 
-		Ct* CancellationToken(std::memory_order memoryOrder = std::memory_order_acquire) {
-			return _cancellationToken.load(memoryOrder);
+		Ct* CancellationToken() {
+			return _cancellationToken;
 		}
 
 		static Task* Self();
@@ -80,8 +80,8 @@ namespace Parallel {
 		}
 
 	private:
+		Task* _continuation;
+		Ct* _cancellationToken;
 		std::atomic<int> _pendingCount;
-		std::atomic<Task*> _continuation;
-		std::atomic<Ct*> _cancellationToken;
 	};
 }
