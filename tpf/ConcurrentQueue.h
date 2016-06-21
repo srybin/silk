@@ -68,10 +68,9 @@ namespace Parallel {
 		}
 
 	private:
-		struct AtomicBufferWithIndicator
-		{
+		struct AtomicBufferWithIndicator {
 			T value;
-			std::atomic<bool> isCommited;
+			std::atomic<bool> isCommited = false;;
 		};
 
 		int _size;
