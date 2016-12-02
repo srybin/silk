@@ -1,0 +1,2 @@
+Sergey Rybin (Project Head, Architect, Maintainer) - https://github.com/srybin
+Pavel Umnikov (Architect, Maintainer) - https://github.com/pavelumnikov
