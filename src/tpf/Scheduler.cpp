@@ -14,10 +14,18 @@ Scheduler::Scheduler(int queuesSize)
 	, _ioWorkers(std::vector<IoWorker*>())
 	, _cpuWorkers(std::vector<CpuWorker*>())
 {
-	_queues.reserve( _cores );
+	w_contexts_by_thread_number_.reserve( _cores );
+	w_contexts_by_thread_id_.reserve( _cores );
+
 	_cpuWorkers.reserve( _cores );
 
 	for (int i = 0; i < _cores; i++) {
+
+		/*
+		 * TODO: replace this code on init internal::w_context for all workers and add these
+		 * to the w_contexts_by_thread_id_ and w_contexts_by_thread_number_ where number is "i"
+		 */
+
 		QueuesContainer* queues = new QueuesContainer( queuesSize );
 		CpuWorker* worker = new CpuWorker(this, _syncForWorkers);
 		_queues.insert(make_pair(worker->ThreadId(), queues));
@@ -28,6 +36,10 @@ Scheduler::Scheduler(int queuesSize)
 	SyncBasedOnWindowsEvent* syncForIoWorkers = new SyncBasedOnWindowsEvent();
 	_ioWorkers.push_back(new IoWorker(*_ioQueue, syncForIoWorkers));
 	syncForIoWorkers->NotifyAll();
+}
+
+internal::w_context* internal::fetch_worker_context(std::thread::id thread_id) {
+	return _w_contexts_by_thread_id[thread_id];
 }
 
 void Scheduler::Spawn(Task* task) {
@@ -132,22 +144,38 @@ void Scheduler::Compute(Task* task) {
 	} while (task != nullptr);
 }
 
-CurrentTask* Scheduler::FetchCurrentTask(std::thread::id currentThreadId) {
-	return _currentTasks[currentThreadId];
+task& internal::allocate_continuation_proxy::allocate(size_t size) const {
+	task& t = *((task*)this);
+	internal::fetch_worker_context(std::this_thread::get_id())->continuation_task = t.continuation();
+	t.set_null_continuation();
+	return *((task*)::operator new(size));
 }
 
-void Scheduler::EnqueueInIoQueue(void* io, Task* continuation) {
-	_ioQueue->Enqueue(io, new CompletionContainer(continuation, std::this_thread::get_id()));
+task& internal::allocate_child_proxy::allocate(size_t size) const {
+	task& t = *((task*)this);
+	internal::fetch_worker_context(std::this_thread::get_id())->continuation_task = &t;
+	return *((task*)::operator new(size));
 }
 
-void Task::Spawn(Task* task) {
-	Scheduler::Instance()->Spawn(task, std::this_thread::get_id());
+task::task() : cancellation_token_(nullptr), ref_count_(0) {
+	internal::w_context* wc = internal::fetch_worker_context(std::this_thread::get_id());
+
+	if (wc != nullptr && wc->continuation_task != nullptr) {
+		continuation_ = wc->continuation_task;
+		wc->continuation_task = nullptr;
+	} else {
+		continuation_ = nullptr;
+	}
 }
 
-void Task::Recycle() {
-	Scheduler::Instance()->FetchCurrentTask(std::this_thread::get_id())->IsRecyclable = true;
+void task::spawn(task& t) {
+	internal::spawn(t, std::this_thread::get_id());
 }
 
-Task* Task::Self() {
-	return Scheduler::Instance()->FetchCurrentTask(std::this_thread::get_id())->Task;
+void task::recycle() {
+	internal::fetch_worker_context(std::this_thread::get_id())->is_recyclable = true;
+}
+
+task* task::self() {
+	return internal::fetch_worker_context(std::this_thread::get_id())->current_executebale_task;
 }

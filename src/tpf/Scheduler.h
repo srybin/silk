@@ -2,7 +2,7 @@
 #include <mutex>
 #include <unordered_map>
 #include "Sync.h"
-#include "Task.h"
+#include <tpf/task.h>
 #include "tpf/async_io.h"
 #include "Win32IO.h"
 #include "CpuWorker.h"
@@ -10,9 +10,11 @@
 #include "QueuesContainer.h"
 
 namespace Parallel {
-	struct CurrentTask {
-		Task* Task;
-		bool IsRecyclable;
+	struct w_context {
+		bool  is_recyclable;
+		task* continuation_task;
+		task* current_executable_task;
+		//TODO: add task deque for worker
 	};
 
 	class Scheduler {
@@ -60,7 +62,7 @@ namespace Parallel {
 		std::vector<IoWorker*> _ioWorkers;
 		std::vector<CpuWorker*> _cpuWorkers;
 		std::atomic<int> _currentWorker = -1;
-		std::unordered_map<std::thread::id, CurrentTask*> _currentTasks;
-		std::unordered_map<std::thread::id, QueuesContainer*> _queues;
+		std::unordered_map<int, internal::w_context*> w_contexts_by_thread_number_;
+		std::unordered_map<std::thread::id, internal::w_context*> w_contexts_by_thread_id_;
 	};
 }
