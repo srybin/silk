@@ -43,7 +43,7 @@ struct FibTask : public task {
 };
 
 int main() {
-	init_pool();
+    init_pool();
 
     const auto start = std::chrono::high_resolution_clock::now();
     
@@ -56,5 +56,5 @@ int main() {
     
     std::cout << "result: " << sum << " time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << std::endl;
 
-	return 0;
+    return 0;
 }

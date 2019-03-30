@@ -53,7 +53,6 @@ public:
 		auto c = fetch_current_worker_context_extension();
 		continuation_ = c->continuation_task ? c->continuation_task : nullptr;
 		c->continuation_task = nullptr;
-
 	}
 
 	virtual ~task() {
