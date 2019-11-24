@@ -57,6 +57,6 @@ Directory "examples" has 3 examples of task-based runtime:
 
 ## Roadmap:
 - [ ] Separete silk.h on 2 files: silk.h and silk_pool.h because it is usefull take only task container primitifs for implementing own thread pool.
-- [ ] refactore lightweight semaphore implementation.
+- [ ] Refactore lightweight semaphore implementation.
 - [ ] Start 2 or more independed thread pools.
 - [ ] Shotdown default thread pool.
