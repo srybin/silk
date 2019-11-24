@@ -213,7 +213,7 @@ public:
 	auto_reset_event() : m_status_(0) {
 	}
 
-	void signal() {
+	void signal(const int count = 1) {
 		int old_status = m_status_.load(std::memory_order_relaxed);
 		for (;;) {    // Increment m_status atomically via CAS loop.
 		
@@ -226,7 +226,7 @@ public:
 		}
 
 		if (old_status < 0)
-			m_sema_.signal();    // Release one waiting thread.
+			m_sema_.signal(count);    // Release one waiting thread.
 	}
 
 	void wait() {
