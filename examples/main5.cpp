@@ -87,7 +87,7 @@ int main() {
 
                 memset(frame->buf, 0, frame->nbytes);
 
-                frame->n = read( evList[i].ident, frame->buf, frame->nbytes );
+                frame->n = read(evList[i].ident, frame->buf, frame->nbytes);
 
                 silk__resume(frame->coro_frame);
             }

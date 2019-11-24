@@ -82,17 +82,17 @@ int main() {
                     silk__read_async(clientsockfd, new char[1024], 1024, silk__readed);
                 }
             }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_frame* frame = ( silk__io_read_frame* )evList[ i ].udata;
+                silk__io_read_frame* frame = (silk__io_read_frame*)evList[i].udata;
 
                 memset(frame->buf, 0, frame->nbytes);
 
-                n = read( evList[i].ident, frame->buf, frame->nbytes );
+                n = read(evList[i].ident, frame->buf, frame->nbytes);
 
-                frame->continuation->set_read_result( evList[i].ident, frame->buf, n  );
+                frame->continuation->set_read_result(evList[i].ident, frame->buf, n);
 
-                spawn( *frame->continuation );
+                spawn(*frame->continuation);
 
-                free( frame );
+                delete frame;
             }
         }
     }

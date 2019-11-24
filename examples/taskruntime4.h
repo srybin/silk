@@ -19,10 +19,10 @@ typedef struct silk__uwcontext_t : silk__wcontext {
 } silk__uwcontext;
 
 silk__wcontext* silk__makeuwcontext() {
-	silk__uwcontext* c = new silk__uwcontext();
+    silk__uwcontext* c = new silk__uwcontext();
     silk__init_wcontext(c);
-	c->scheduler_coro = new ucontext_t();
-	return (silk__wcontext*)c;
+    c->scheduler_coro = new ucontext_t();
+    return (silk__wcontext*)c;
 }
 
 silk__uwcontext* silk__fetch_current_uwcontext() {

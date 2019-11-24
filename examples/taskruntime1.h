@@ -12,9 +12,7 @@ inline void silk__spawn(std::function<void()> t) {
 
 	f->func = new std::function<void()>(t);
 
-	f->prev = f->next = nullptr;
-
-	silk__spawn(silk__current_worker_id, f);
+	silk__spawn(silk__current_worker_id, (silk__task*) f);
 }
 
 void silk__schedule(silk__task* t) {
