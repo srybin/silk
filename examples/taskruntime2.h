@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 #include <sys/event.h>
+#include <unistd.h>
 #include "./../src/silk.h"
 
 class task;
@@ -240,7 +241,7 @@ typedef struct silk__io_read_frame_t {
 void silk__read_async(const int socket, char* buf, const int nbytes, const readed_callback callback) {
     silk__uwcontext* c = silk__fetch_current_uwcontext();
 
-    silk__io_read_continuation* t = dynamic_cast< silk__io_read_continuation* >(c->current_executable_task);
+    silk__io_read_continuation* t = dynamic_cast<silk__io_read_continuation*>(c->current_executable_task);
    
     if (t && t->read_sequence_count() < 32) {
         memset(buf, 0, nbytes);

@@ -3,6 +3,7 @@
 #include <functional>
 #include <sys/types.h>
 #include <sys/event.h>
+#include <unistd.h>
 
 typedef struct silk__coro_frame_t : silk__task {
     std::function<void()> after_yield;
@@ -26,7 +27,7 @@ silk__wcontext* silk__makeuwcontext() {
 }
 
 silk__uwcontext* silk__fetch_current_uwcontext() {
-	return (silk__uwcontext*) silk__wcontexts[silk__current_worker_id];
+    return (silk__uwcontext*) silk__wcontexts[silk__current_worker_id];
 }
 
 void silk__yield() {
@@ -75,7 +76,7 @@ void silk__schedule( silk__task* t ) {
 
     swapcontext( c->scheduler_coro, c->current_coro_frame->coro );
 
-     if ( c->current_coro_frame->is_suspended ) {
+    if ( c->current_coro_frame->is_suspended ) {
         std::function<void()> ay = c->current_coro_frame->after_yield;
        
         c->current_coro_frame->after_yield = nullptr;

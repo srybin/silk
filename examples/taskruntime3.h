@@ -2,6 +2,7 @@
 #include <ucontext.h>
 #include <sys/types.h>
 #include <sys/event.h>
+#include <unistd.h>
 
 typedef struct silk__coro_frame_t : silk__task {
     int read_sequence_count;
@@ -25,7 +26,7 @@ silk__wcontext* silk__makeuwcontext() {
 }
 
 silk__uwcontext* silk__fetch_current_uwcontext() {
-	return (silk__uwcontext*) silk__wcontexts[silk__current_worker_id];
+    return (silk__uwcontext*) silk__wcontexts[silk__current_worker_id];
 }
 
 void silk__yield() {

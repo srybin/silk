@@ -83,7 +83,7 @@ int main() {
                     silk__spawn(silk__coro silk__r, 32768, 1, clientsockfd);
                 }
             }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_frame* frame = ( silk__io_read_frame* )evList[ i ].udata;
+                silk__io_read_frame* frame = (silk__io_read_frame*)evList[i].udata;
 
                 memset(frame->buf, 0, frame->nbytes);
 
