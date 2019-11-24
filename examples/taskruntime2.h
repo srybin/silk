@@ -155,7 +155,7 @@ inline task& allocate_child_proxy::allocate(const size_t size) const {
 	return *((task*)::operator new(size));
 }
 
-inline void silk__schedule(silk__task* v) {
+void silk__schedule(silk__task* v) {
 	silk__uwcontext* cx = silk__fetch_current_uwcontext();
 
 	task* t = (task*)v;
@@ -177,8 +177,7 @@ inline void silk__schedule(silk__task* v) {
 				}
 
 				delete t;
-			}
-			else if (!bypass) {
+			} else if (!bypass) {
 				break;
 			}
 
@@ -186,8 +185,7 @@ inline void silk__schedule(silk__task* v) {
 				t = bypass;
 				continue;
 			}
-		}
-		else {
+		} else {
 			c = t->continuation();
 			delete t;
 		}
@@ -198,8 +196,6 @@ inline void silk__schedule(silk__task* v) {
 }
 
 inline void spawn(task& t) {
-	t.prev = t.next = nullptr;
-	
 	silk__spawn(silk__current_worker_id, (silk__task*)&t);
 }
 
