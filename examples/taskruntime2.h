@@ -229,12 +229,12 @@ public:
 		int read_sequence_count = read_sequence_count_;
 
         callback_( socket_, buf_, nbytes_ );
-
+		
 		if (read_sequence_count != read_sequence_count_) {
-        	recycle();
-       
-        	return this;
-    	}
+			recycle();
+			
+			return this;
+		}
                  
         return nullptr;
     }
