@@ -2,7 +2,6 @@
 
 #include <thread>
 #include <atomic>
-#include <unordered_map>
 #include "semaphore.h"
 
 template<int> struct int_to_type {};

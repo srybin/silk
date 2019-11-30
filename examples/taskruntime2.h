@@ -226,7 +226,15 @@ public:
     }
          
     task* execute() {
+		int read_sequence_count = read_sequence_count_;
+
         callback_( socket_, buf_, nbytes_ );
+
+		if (read_sequence_count != read_sequence_count_) {
+        	recycle();
+       
+        	return this;
+    	}
                  
         return nullptr;
     }
@@ -242,7 +250,7 @@ void silk__read_async(const int socket, char* buf, const int nbytes, const reade
     silk__uwcontext* c = silk__fetch_current_uwcontext();
 
     silk__io_read_continuation* t = dynamic_cast<silk__io_read_continuation*>(c->current_executable_task);
-   
+
     if (t && t->read_sequence_count() < 32) {
         memset(buf, 0, nbytes);
        
@@ -250,9 +258,6 @@ void silk__read_async(const int socket, char* buf, const int nbytes, const reade
        
         if (n >= 0 || (n == -1 && errno != EAGAIN)) {
             t->set_read_result(socket, buf, n);
-            c->is_recyclable = true;
-            
-            spawn(*t);
            
             return;
         }
