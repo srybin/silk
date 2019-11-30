@@ -41,8 +41,6 @@ void silk__yield() {
 #define silk__yield silk__yield();
 
 template<typename... Args> silk__coro_frame* silk__spawn( void(*func)(), int stack_size, int args_size, Args... args ) {
-    silk__uwcontext_t* c = silk__fetch_current_uwcontext();
-    
     char* stack = new char[stack_size];
     ucontext_t* coro = new ucontext_t();
     getcontext(coro);
