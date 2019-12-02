@@ -22,7 +22,7 @@ void silk__schedule(silk__task* t) {
 	
 	(*f)();
 	
-	free(f);
+	delete f;
 
-	free(t);
+	delete t;
 }

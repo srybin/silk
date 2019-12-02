@@ -115,7 +115,7 @@ int silk__read_async(const int socket, char* buf, const int nbytes ) {
 
     struct kevent evSet;
     EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, frame);
-    assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
+    assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
 
     silk__yield
 
