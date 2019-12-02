@@ -1,16 +1,15 @@
 #include "./../src/silk.h"
 #include <ucontext.h>
-#include <functional>
 #include <sys/types.h>
 #include <sys/event.h>
 #include <unistd.h>
 
 typedef struct silk__coro_frame_t : silk__task {
-    std::function<void()> after_yield;
     int read_sequence_count;
     bool is_suspended;
     ucontext_t* coro;
     int stack_size;
+    int affinity_to;
     char* stack;
 } silk__coro_frame;
 
@@ -59,14 +58,15 @@ template<typename... Args> silk__coro_frame* silk__spawn( void(*func)(), int sta
     return f;
 }
 
-void silk__resume(silk__coro_frame* frame) {
-    silk__spawn(silk__current_worker_id, (silk__task*) frame);
+void silk__resume(silk__coro_frame* frame){
+    silk__enqueue_affinity(frame->affinity_to, (silk__task*) frame);
 }
 
 void silk__schedule( silk__task* t ) {
     silk__uwcontext* c = silk__fetch_current_uwcontext();
 
     c->current_coro_frame = (silk__coro_frame*) t;
+    c->current_coro_frame->affinity_to = silk__current_worker_id;
     c->current_coro_frame->is_suspended = false;
     c->current_coro_frame->coro->uc_link = c->scheduler_coro;
 
@@ -74,17 +74,8 @@ void silk__schedule( silk__task* t ) {
 
     swapcontext( c->scheduler_coro, c->current_coro_frame->coro );
 
-    if ( c->current_coro_frame->is_suspended ) {
-        std::function<void()> ay = c->current_coro_frame->after_yield;
-       
-        c->current_coro_frame->after_yield = nullptr;
-       
-        if ( ay ) {
-            ay();
-        }
-       
+    if ( c->current_coro_frame->is_suspended )
         return;
-    }
     
     delete c->current_coro_frame->coro;
     delete c->current_coro_frame->stack;
@@ -108,7 +99,7 @@ int silk__read_async(const int socket, char* buf, const int nbytes ) {
        
         int n = read(socket, buf, nbytes); //NON-BLOCKING MODE...
        
-        if (n >= 0 || (n == -1 && errno != EAGAIN)) {
+        if ( n >= 0 || (n == -1 && errno != EAGAIN)) {
             c->current_coro_frame->read_sequence_count++;
 
             return n;
@@ -122,11 +113,9 @@ int silk__read_async(const int socket, char* buf, const int nbytes ) {
     frame->nbytes = nbytes;
     frame->buf = buf;
 
-    c->current_coro_frame->after_yield = [=]() {
-        struct kevent evSet;
-        EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, frame);
-        assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
-    };
+    struct kevent evSet;
+    EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, frame);
+    assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
 
     silk__yield
 

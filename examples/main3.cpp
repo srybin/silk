@@ -1,44 +1,98 @@
 #define _XOPEN_SOURCE 600
-#include <stdio.h>
+#define SO_REUSEPORT    0x0200          /* allow local address & port reuse */
+#include <sys/socket.h>
+#include <sys/errno.h>
+#include <netdb.h>
+#include <assert.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/event.h>
+#include <strings.h>
+#include <stdio.h>
 #include <unistd.h>
 #include "./taskruntime3.h"
 //#include "./taskruntime4.h"
 
-void silk__read(int i) {
-    printf("%d silk__read(%d): starting\n", silk__current_worker_id, i);
-
-    int r = i + 1;
-
-    silk__yield
-    
-    printf("%d silk__read(%d): returning [%d]\n", silk__current_worker_id, i, r);
+void silk__r(const int socket) {
+    char buf[1024];
+    int n;
+         
+    while (1) {
+        n = silk__read_async(socket, buf, 1024);
+                 
+        printf("[%d] silk__r(%d) [%d] %s\n", silk__current_worker_id, socket, n, buf);
+    }
 }
 
 int main() {
     silk__init_pool(silk__schedule, silk__makeuwcontext);
 
-    int frames_count = 10000;
+    struct addrinfo hints, *ser;
 
-    silk__coro_frame** frames = (silk__coro_frame**) malloc(frames_count * sizeof(silk__coro_frame*));
+    memset(&hints, 0, sizeof hints);
 
-    for (int i = 0; i < frames_count; i++) {
-        frames[i] = silk__spawn(silk__coro silk__read, 32768, 1, i);
-    }
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
 
-    silk__join_main_thread_2_pool(silk__schedule);
+    getaddrinfo(NULL, "3491", & hints, &ser);
 
-    sleep(5);
+    int listensockfd = socket(ser->ai_family, ser->ai_socktype, ser->ai_protocol);
 
-    for (int i = 0; i < frames_count; i++) {
-        silk__resume(frames[i]);
-    }
+    fcntl(listensockfd, F_SETFL, fcntl(listensockfd, F_GETFL, 0) | O_NONBLOCK);
 
-    silk__join_main_thread_2_pool(silk__schedule);
+    int yes = 1;
+    setsockopt(listensockfd, SOL_SOCKET, SO_REUSEPORT, & yes, sizeof(int));
+
+    bind(listensockfd, ser-> ai_addr, ser-> ai_addrlen);
+
+    listen(listensockfd, SOMAXCONN);
+
+    kq = kqueue();
+    struct kevent evSet;
+    struct kevent evList[1024];
+
+    EV_SET(&evSet, listensockfd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+    assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
     
-    printf("main: returning\n");
+    int n = 0;
 
-    free(frames);
+    while (1) {
+        int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
+
+        for (int i = 0; i < nev; i++) {  //run pending...
+            if (evList[i].flags & EV_EOF) {
+                close(evList[i].ident); //Disconnect: socket is automatically removed from the kq by the kernel.
+            } else if (evList[i].ident == listensockfd) {
+                while (1) {
+                    struct sockaddr_storage addr;
+                    socklen_t socklen = sizeof(addr);
+                    
+                    int clientsockfd = accept(evList[i].ident, (struct sockaddr *)&addr, &socklen);
+                    if (clientsockfd == -1 && (errno == EAGAIN || errno == ECONNRESET)) {
+                        break;
+                    }
+
+                    if (clientsockfd == -1) {
+                        break;
+                    }
+
+                    fcntl(clientsockfd, F_SETFL, fcntl(clientsockfd, F_GETFL, 0) | O_NONBLOCK);
+
+                    silk__spawn(silk__coro silk__r, 32768, 1, clientsockfd);
+                }
+            }  else if (evList[i].filter == EVFILT_READ) {
+                silk__io_read_frame* frame = (silk__io_read_frame*)evList[i].udata;
+
+                memset(frame->buf, 0, frame->nbytes);
+
+                frame->n = read(evList[i].ident, frame->buf, frame->nbytes);
+
+                silk__resume(frame->coro_frame);
+            }
+        }
+    }
 
     return 0;
 }
