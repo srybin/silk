@@ -18,6 +18,12 @@ silk__coro silk__r(const int s) {
     while (1) {
         n = co_await silk__read_async(s, buf, 1024);
 
+        if (n <= 0) {
+            close(s);
+
+            return;
+        }
+
         printf("[%d] silk__r(%d) [%d] %s\n", silk__current_worker_id, s, n, buf);
     }
 }
