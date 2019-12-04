@@ -20,6 +20,12 @@ void silk__r(const int socket) {
          
     while (1) {
         n = silk__read_async(socket, buf, 1024);
+        
+        if (n <= 0) {
+            close(socket);
+
+            return;
+        }
                  
         printf("[%d] silk__r(%d) [%d] %s\n", silk__current_worker_id, socket, n, buf);
     }
@@ -62,9 +68,7 @@ int main() {
         int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
 
         for (int i = 0; i < nev; i++) {  //run pending...
-            if (evList[i].flags & EV_EOF) {
-                close(evList[i].ident); //Disconnect: socket is automatically removed from the kq by the kernel.
-            } else if (evList[i].ident == listensockfd) {
+            if (evList[i].ident == listensockfd) {
                 while (1) {
                     struct sockaddr_storage addr;
                     socklen_t socklen = sizeof(addr);
@@ -83,11 +87,11 @@ int main() {
                     silk__spawn(silk__coro silk__r, 32768, 1, clientsockfd);
                 }
             }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_frame* frame = (silk__io_read_frame*)evList[i].udata;
+                silk__io_read_frame* frame = (silk__io_read_frame*) evList[i].udata;
 
                 memset(frame->buf, 0, frame->nbytes);
 
-                frame->n = read(evList[i].ident, frame->buf, frame->nbytes);
+                frame->n = evList[i].flags & EV_EOF ? 0 : read(evList[i].ident, frame->buf, frame->nbytes);
 
                 silk__resume(frame->coro_frame);
             }
