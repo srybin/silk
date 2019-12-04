@@ -1,27 +1,45 @@
-#include "./../src/silk.h"
-#include <ucontext.h>
+#include <experimental/coroutine>
 #include <sys/types.h>
 #include <sys/event.h>
-#include <unistd.h>
+#include "./../src/silk.h"
 
-typedef struct silk__coro_frame_t : silk__task {
-    int read_sequence_count;
-    bool is_suspended;
-    ucontext_t* coro;
-    int stack_size;
-    int affinity_to;
-    char* stack;
-} silk__coro_frame;
+struct silk__coro : public silk__task {
+    struct promise_type;
+
+    std::experimental::coroutine_handle<promise_type> h;
+    
+    silk__coro(std::experimental::coroutine_handle<promise_type> handle) : h(handle) {}
+
+    void finalize() { h.destroy(); }
+    
+    bool resume() {
+        if (not h.done())
+            h.resume();
+        return not h.done();
+    }
+};
+
+struct silk__coro::promise_type {  
+    auto get_return_object() { return std::experimental::coroutine_handle<promise_type>::from_promise(*this); }
+    
+    auto initial_suspend() { return std::experimental::suspend_always(); }
+    
+    auto final_suspend() { return std::experimental::suspend_always(); }
+    
+    void return_void() {}
+    
+    void unhandled_exception() { std::terminate(); }
+
+    static silk__coro get_return_object_on_allocation_failure() { throw std::bad_alloc(); }
+};
 
 typedef struct silk__uwcontext_t : silk__wcontext {
-    silk__coro_frame* current_coro_frame;
-    ucontext_t* scheduler_coro;  
+    silk__coro* current_coro;  
 } silk__uwcontext;
 
 silk__wcontext* silk__makeuwcontext() {
     silk__uwcontext* c = new silk__uwcontext();
     silk__init_wcontext(c);
-    c->scheduler_coro = new ucontext_t();
     return (silk__wcontext*)c;
 }
 
@@ -29,99 +47,66 @@ silk__uwcontext* silk__fetch_current_uwcontext() {
     return (silk__uwcontext*) silk__wcontexts[silk__current_worker_id];
 }
 
-void silk__yield() {
-    silk__uwcontext_t* c = silk__fetch_current_uwcontext();
-    
-    c->current_coro_frame->is_suspended = true;
-    
-    swapcontext(c->current_coro_frame->coro, c->scheduler_coro);
+silk__coro* silk__spawn(silk__coro coro) {
+    silk__coro* c = new silk__coro(coro);
+
+    silk__spawn(silk__current_worker_id, (silk__task*) c);
+
+    return c;
 }
 
-#define silk__coro (void(*)())
-#define silk__yield silk__yield();
-
-template<typename... Args> silk__coro_frame* silk__spawn( void(*func)(), int stack_size, int args_size, Args... args ) {
-    char* stack = new char[stack_size];
-    ucontext_t* coro = new ucontext_t();
-    getcontext(coro);
-    coro->uc_stack.ss_sp = stack;
-    coro->uc_stack.ss_size = stack_size;
-    makecontext(coro, func, args_size, args...);
-
-    silk__coro_frame* f = new silk__coro_frame();
-    f->stack_size = stack_size;
-    f->stack = stack;
-    f->coro = coro;
-
-    silk__spawn( silk__current_worker_id, (silk__task*) f );
-    
-    return f;
+void silk__spawn(silk__coro* coro) {
+    silk__spawn(silk__current_worker_id, (silk__task*) coro);
 }
 
-void silk__resume(silk__coro_frame* frame){
-    silk__enqueue_affinity(frame->affinity_to, (silk__task*) frame);
-}
+void silk__schedule(silk__task* t) {
+    silk__coro* c = (silk__coro*)t;
 
-void silk__schedule( silk__task* t ) {
-    silk__uwcontext* c = silk__fetch_current_uwcontext();
+    silk__fetch_current_uwcontext()->current_coro = c;
 
-    c->current_coro_frame = (silk__coro_frame*) t;
-    c->current_coro_frame->affinity_to = silk__current_worker_id;
-    c->current_coro_frame->is_suspended = false;
-    c->current_coro_frame->coro->uc_link = c->scheduler_coro;
-
-    std::atomic_thread_fence(std::memory_order_acquire);
-
-    swapcontext( c->scheduler_coro, c->current_coro_frame->coro );
-
-    if ( c->current_coro_frame->is_suspended )
-        return;
-    
-    delete c->current_coro_frame->coro;
-    delete c->current_coro_frame->stack;
-    delete c->current_coro_frame;
+    if (!c->resume()) {
+        c->finalize();
+    }
 }
 
 int kq;
 
 typedef struct silk__io_read_frame_t {
-    silk__coro_frame* coro_frame;
+    silk__coro* coro; 
     int nbytes;
     char* buf;
     int n;
 } silk__io_read_frame;
 
-int silk__read_async(const int socket, char* buf, const int nbytes ) {
-    silk__uwcontext* c = silk__fetch_current_uwcontext();
+struct silk__io_read_awaitable {
+    char* buf;
+    int nbytes;
+    int socket;
 
-    if (c->current_coro_frame->read_sequence_count < 32) {
-        memset(buf, 0, nbytes);
-       
-        int n = read(socket, buf, nbytes); //NON-BLOCKING MODE...
-       
-        if ( n >= 0 || (n == -1 && errno != EAGAIN)) {
-            c->current_coro_frame->read_sequence_count++;
+    silk__io_read_frame* frame;
 
-            return n;
-        }
+    constexpr bool await_ready() const noexcept { return false; }
+        
+    void await_suspend(std::experimental::coroutine_handle<> coro) {
+        frame = new silk__io_read_frame();
+        frame->coro = silk__fetch_current_uwcontext()->current_coro;
+        frame->nbytes = nbytes;
+        frame->buf = buf;
+        
+        struct kevent evSet;
+        EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, frame);
+        assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
     }
 
-    c->current_coro_frame->read_sequence_count = 0;
+    auto await_resume() {
+        int n = frame->n;
 
-    silk__io_read_frame* frame = new silk__io_read_frame();
-    frame->coro_frame = c->current_coro_frame;
-    frame->nbytes = nbytes;
-    frame->buf = buf;
+        delete frame;
+        
+        return n; 
+    }
+};
 
-    struct kevent evSet;
-    EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, frame);
-    assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
-
-    silk__yield
-
-    int n = frame->n;
-
-    delete frame;
-
-    return n;
+auto silk__read_async(const int socket, char* buf, const int nbytes) {
+    return silk__io_read_awaitable {buf, nbytes, socket};
 }
