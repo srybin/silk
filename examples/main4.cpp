@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 600
-#define SO_REUSEPORT    0x0200          /* allow local address & port reuse */
 #include <sys/socket.h>
 #include <sys/errno.h>
 #include <netdb.h>
@@ -11,23 +9,16 @@
 #include <strings.h>
 #include <stdio.h>
 #include <unistd.h>
-#include "./taskruntime3.1.h"
-//#include "./taskruntime3.2.h"
+#include "./taskruntime4.h"
 
-void silk__r(const int socket) {
+silk__coro silk__r(const int s) {
     char buf[1024];
     int n;
          
     while (1) {
-        n = silk__read_async(socket, buf, 1024);
+        n = co_await silk__read_async(s, buf, 1024);
 
-        if (n <= 0) {
-            close(socket);
-
-            return;
-        }
-                 
-        printf("[%d] silk__r(%d) [%d] %s\n", silk__current_worker_id, socket, n, buf);
+        printf("[%d] silk__r(%d) [%d] %s\n", silk__current_worker_id, s, n, buf);
     }
 }
 
@@ -63,7 +54,7 @@ int main() {
     assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
     
     int n = 0;
-
+    
     while (1) {
         int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
 
@@ -84,7 +75,7 @@ int main() {
 
                     fcntl(clientsockfd, F_SETFL, fcntl(clientsockfd, F_GETFL, 0) | O_NONBLOCK);
 
-                    silk__spawn(silk__coro silk__r, 32768, 1, clientsockfd);
+                    silk__spawn(silk__r(clientsockfd));
                 }
             }  else if (evList[i].filter == EVFILT_READ) {
                 silk__io_read_frame* frame = (silk__io_read_frame*) evList[i].udata;
@@ -93,7 +84,7 @@ int main() {
 
                 frame->n = evList[i].flags & EV_EOF ? 0 : read(evList[i].ident, frame->buf, frame->nbytes);
 
-                silk__resume(frame->coro_frame);
+                silk__spawn(frame->coro);
             }
         }
     }
