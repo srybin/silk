@@ -50,10 +50,10 @@ OS thread which call silk__init_pool() also are included to the thread pool. He 
 Directory "examples" has 3 examples of task-based runtime:
 
 1. [taskruntime1.h](examples/taskruntime1.h)/[main1.cpp](examples/main1.cpp), where tasks are functions.
-2. [taskruntime2.h](examples/taskruntime2.h)/[main2.cpp](examples/main2.cpp), where tasks are based on continuation passing like in Intel Threading Building Blocks.
-3. [taskruntime3.h](examples/taskruntime3.h)/[taskruntime4.h](examples/taskruntime4.h)/[main3.cpp](examples/main3.cpp), where tasks are coroutines (taskruntime3.h - thread-bound coroutines were after first calling, taskruntime4.h - not thread-bound coroutines).
-4. [main4.cpp](examples/main4.cpp) implements simple TCP server (FreeBSD/kqueue/taskruntime2.h - continuation passing).
-5. [main5.cpp](examples/main5.cpp) implements simple TCP server (FreeBSD/kqueue/taskruntime3.h/taskruntime4.h - coroutines).
+2. [taskruntime2.h](examples/taskruntime2.h)/[main2.1.cpp](examples/main2.1.cpp), where tasks are based on continuation passing like in Intel Threading Building Blocks.
+3. [taskruntime2.h](examples/taskruntime2.h)/[main2.2.cpp](examples/main2.2.cpp) implements simple TCP server (FreeBSD/kqueue/taskruntime2.h - continuation passing).
+3. [taskruntime3.1.h](examples/taskruntime3.1.h)/[taskruntime3.2.h](examples/taskruntime3.2.h)/[main3.cpp](examples/main3.cpp) implements simple TCP server, where tasks are coroutines (taskruntime3.2.h - thread-bound coroutines were after first calling, taskruntime3.1.h - not thread-bound coroutines).
+4. [taskruntime4.h](examples/taskruntime4.h)/[main1.cpp](examples/main4.cpp) implements simple TCP server (FreeBSD/kqueue), where task is coroutines TS.
 
 ## Roadmap:
 - [ ] Separete silk.h on 2 files: silk.h and silk_pool.h because it is usefull take only task container primitifs for implementing own thread pool.
