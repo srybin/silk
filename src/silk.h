@@ -151,50 +151,39 @@ public:
 class silk__slim_semaphore {
 	std::atomic<int> m_count;
 	Semaphore m_sema;
-
-	void waitWithPartialSpinning()
-	{
-		int oldCount;
-		// Is there a better way to set the initial spin count?
-		// If we lower it to 1000, testBenaphore becomes 15x slower on my Core i7-5930K Windows PC,
-		// as threads start hitting the kernel semaphore.
-		int spin = 10000;
-		while (spin--)
-		{
-			oldCount = m_count.load(std::memory_order_relaxed);
-			if ((oldCount > 0) && m_count.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire))
-				return;
-			std::atomic_signal_fence(std::memory_order_acquire);     // Prevent the compiler from collapsing the loop.
-		}
-		oldCount = m_count.fetch_sub(1, std::memory_order_acquire);
-		if (oldCount <= 0)
-		{
-			m_sema.wait();
-		}
-	}
-
 public:
 	silk__slim_semaphore(int initialCount = 0) : m_count(initialCount) {
 	}
 
-	bool tryWait()
-	{
+	void wait() {
 		int oldCount = m_count.load(std::memory_order_relaxed);
-		return (oldCount > 0 && m_count.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire));
+
+		if ((oldCount > 0 && m_count.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire)))
+			return;
+		
+		int spin = 10000;
+
+		while (spin--) {
+			oldCount = m_count.load(std::memory_order_relaxed);
+
+			if ((oldCount > 0) && m_count.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire))
+				return;
+			
+			std::atomic_signal_fence(std::memory_order_acquire);
+		}
+
+		oldCount = m_count.fetch_sub(1, std::memory_order_acquire);
+		
+		if (oldCount <= 0) {
+			m_sema.wait();
+		}
 	}
 
-	void wait()
-	{
-		if (!tryWait())
-			waitWithPartialSpinning();
-	}
-
-	void signal(const int count = 1)
-	{
+	void signal(const int count = 1) {
 		const int old_count = m_count.fetch_add(count, std::memory_order_release);
 		const int to_release = -old_count < count ? -old_count : count;
-		if (to_release > 0)
-		{
+
+		if (to_release > 0) {
 			m_sema.signal(to_release);
 		}
 	}
