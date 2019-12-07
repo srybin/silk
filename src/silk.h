@@ -148,9 +148,7 @@ public:
 
 #endif
 
-class LightweightSemaphore
-{
-private:
+class silk__slim_semaphore {
 	std::atomic<int> m_count;
 	Semaphore m_sema;
 
@@ -176,8 +174,7 @@ private:
 	}
 
 public:
-	LightweightSemaphore(int initialCount = 0) : m_count(initialCount)
-	{
+	silk__slim_semaphore(int initialCount = 0) : m_count(initialCount) {
 	}
 
 	bool tryWait()
@@ -203,15 +200,15 @@ public:
 	}
 };
 
-class auto_reset_event {
+class silk__auto_reset_event {
 	// m_status == 1: Event object is signaled.
 	// m_status == 0: Event object is reset and no threads are waiting.
 	// m_status == -N: Event object is reset and N threads are waiting.
 	std::atomic<int> m_status_;
-	LightweightSemaphore m_sema_;
+	silk__slim_semaphore m_sema_;
 
 public:
-	auto_reset_event() : m_status_(0) {
+	silk__auto_reset_event() : m_status_(0) {
 	}
 
 	void signal(const int count = 1) {
@@ -307,7 +304,7 @@ thread_local int silk__current_worker_id;
 int silk__workers_count;
 std::atomic<int> silk__workers_count_incrementor;
 silk__wcontext** silk__wcontexts;
-auto_reset_event* silk__sem = new auto_reset_event();
+silk__auto_reset_event* silk__sem = new silk__auto_reset_event();
 
 inline void silk__init_wcontext(silk__wcontext* c) {
 	c->head = c->tail = c->affinity_head = c->affinity_tail = nullptr;
