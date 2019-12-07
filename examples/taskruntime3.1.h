@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <sys/event.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <fcntl.h>
 
 typedef struct silk__coro_frame_t : silk__task {
     std::function<void()> after_yield;
@@ -135,4 +137,30 @@ int silk__read_async(const int socket, char* buf, const int nbytes ) {
     delete frame;
 
     return n;
+}
+
+int silk__accept_async(const int listensocket, struct sockaddr* addr, socklen_t* socklen) {
+    int s;
+
+    while(1) {
+        s = accept(listensocket, addr, socklen); //NON-BLOCKING MODE...
+
+        if (s == -1 && errno == EAGAIN) {
+            silk__uwcontext* c = silk__fetch_current_uwcontext();
+       
+            c->current_coro_frame->after_yield = [=]() {
+                struct kevent evSet;
+                EV_SET(&evSet, listensocket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, c->current_coro_frame);
+                assert(-1 != kevent(kq, &evSet, 1, NULL, 0, NULL));
+            };
+           
+            silk__yield
+           
+            continue;
+        }
+        
+        fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
+
+        return s;
+    }
 }
