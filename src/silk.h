@@ -26,7 +26,7 @@
 #endif
 
 class silk__slim_semaphore {
-	std::atomic<int> m_count;
+	std::atomic<int> count_;
 #if defined(_WIN32)
 	HANDLE s_;
 #elif defined(__MACH__)
@@ -35,7 +35,7 @@ class silk__slim_semaphore {
 	sem_t s_;
 #endif
 public:
-	silk__slim_semaphore(int initialCount = 0) : m_count(initialCount) {
+	silk__slim_semaphore(int initialCount = 0) : count_(initialCount) {
 #if defined(_WIN32)
 		s_ = CreateSemaphore(NULL, initialCount, MAXLONG, NULL);
 #elif defined(__MACH__)
@@ -56,23 +56,23 @@ public:
 	}
 
 	void wait() {
-		int oldCount = m_count.load(std::memory_order_relaxed);
+		int oldCount = count_.load(std::memory_order_relaxed);
 
-		if ((oldCount > 0 && m_count.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire)))
+		if ((oldCount > 0 && count_.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire)))
 			return;
 		
 		int spin = 10000;
 
 		while (spin--) {
-			oldCount = m_count.load(std::memory_order_relaxed);
+			oldCount = count_.load(std::memory_order_relaxed);
 
-			if ((oldCount > 0) && m_count.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire))
+			if ((oldCount > 0) && count_.compare_exchange_strong(oldCount, oldCount - 1, std::memory_order_acquire))
 				return;
 			
 			std::atomic_signal_fence(std::memory_order_acquire);
 		}
 
-		oldCount = m_count.fetch_sub(1, std::memory_order_acquire);
+		oldCount = count_.fetch_sub(1, std::memory_order_acquire);
 		
 		if (oldCount <= 0) {
 #if defined(_WIN32)
@@ -89,7 +89,7 @@ public:
 	}
 
 	void signal(const int count = 1) {
-		const int old_count = m_count.fetch_add(count, std::memory_order_release);
+		const int old_count = count_.fetch_add(count, std::memory_order_release);
 		int to_release = -old_count < count ? -old_count : count;
 
 		if (to_release > 0) {
