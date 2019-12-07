@@ -1,7 +1,7 @@
 #include <experimental/coroutine>
 #include <sys/types.h>
 #include <sys/event.h>
-#include "./../src/silk.h"
+#include "./../src/silk_pool.h"
 
 struct silk__coro : public silk__task {
     struct promise_type;

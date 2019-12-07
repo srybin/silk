@@ -3,7 +3,7 @@
 #include <sys/types.h>
 #include <sys/event.h>
 #include <unistd.h>
-#include "./../src/silk.h"
+#include "./../src/silk_pool.h"
 
 class task;
 
