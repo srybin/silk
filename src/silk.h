@@ -109,9 +109,6 @@ public:
 };
 
 class silk__auto_reset_event {
-	// m_status == 1: Event object is signaled.
-	// m_status == 0: Event object is reset and no threads are waiting.
-	// m_status == -N: Event object is reset and N threads are waiting.
 	std::atomic<int> m_status_;
 	silk__slim_semaphore m_sema_;
 
@@ -121,18 +118,16 @@ public:
 
 	void signal(const int count = 1) {
 		int old_status = m_status_.load(std::memory_order_relaxed);
-		for (;;) {    // Increment m_status atomically via CAS loop.
+		for (;;) {
 		
 			const int new_status = old_status < 1 ? old_status + 1 : 1;
 			
 			if (m_status_.compare_exchange_weak(old_status, new_status, std::memory_order_release, std::memory_order_relaxed))
 				break;
-			// The compare-exchange failed, likely because another thread changed m_status.
-			// oldStatus has been updated. Retry the CAS loop.
 		}
 
 		if (old_status < 0)
-			m_sema_.signal(count);    // Release one waiting thread.
+			m_sema_.signal(count);
 	}
 
 	void wait() {
