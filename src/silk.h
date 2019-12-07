@@ -7,152 +7,52 @@
 //---------------------------------------------------------
 // Semaphore (Windows)
 //---------------------------------------------------------
-
 #include <windows.h>
 #undef min
 #undef max
-
-class Semaphore
-{
-private:
-	HANDLE m_hSema;
-
-	Semaphore(const Semaphore& other) = delete;
-	Semaphore& operator=(const Semaphore& other) = delete;
-
-public:
-	Semaphore(int initialCount = 0)
-	{
-		m_hSema = CreateSemaphore(NULL, initialCount, MAXLONG, NULL);
-	}
-
-	~Semaphore()
-	{
-		CloseHandle(m_hSema);
-	}
-
-	void wait()
-	{
-		WaitForSingleObject(m_hSema, INFINITE);
-	}
-
-	void signal(int count = 1)
-	{
-		ReleaseSemaphore(m_hSema, count, NULL);
-	}
-};
-
-
 #elif defined(__MACH__)
 //---------------------------------------------------------
 // Semaphore (Apple iOS and OSX)
 // Can't use POSIX semaphores due to http://lists.apple.com/archives/darwin-kernel/2009/Apr/msg00010.html
 //---------------------------------------------------------
-
 #include <mach/mach.h>
-
-class Semaphore
-{
-private:
-	semaphore_t m_sema;
-
-	Semaphore(const Semaphore& other) = delete;
-	Semaphore& operator=(const Semaphore& other) = delete;
-
-public:
-	Semaphore(int initialCount = 0)
-	{
-		assert(initialCount >= 0);
-		semaphore_create(mach_task_self(), &m_sema, SYNC_POLICY_FIFO, initialCount);
-	}
-
-	~Semaphore()
-	{
-		semaphore_destroy(mach_task_self(), m_sema);
-	}
-
-	void wait()
-	{
-		semaphore_wait(m_sema);
-	}
-
-	void signal()
-	{
-		semaphore_signal(m_sema);
-	}
-
-	void signal(int count)
-	{
-		while (count-- > 0)
-		{
-			semaphore_signal(m_sema);
-		}
-	}
-};
-
-
 #elif defined(__unix__)
 //---------------------------------------------------------
 // Semaphore (POSIX, Linux)
 //---------------------------------------------------------
-
 #include <semaphore.h>
-
-class Semaphore
-{
-private:
-	sem_t m_sema;
-
-	Semaphore(const Semaphore& other) = delete;
-	Semaphore& operator=(const Semaphore& other) = delete;
-
-public:
-	Semaphore(int initialCount = 0)
-	{
-		sem_init(&m_sema, 0, initialCount);
-	}
-
-	~Semaphore()
-	{
-		sem_destroy(&m_sema);
-	}
-
-	void wait()
-	{
-		// http://stackoverflow.com/questions/2013181/gdb-causes-sem-wait-to-fail-with-eintr-error
-		int rc;
-		do
-		{
-			rc = sem_wait(&m_sema);
-		} while (rc == -1 && errno == EINTR);
-	}
-
-	void signal()
-	{
-		sem_post(&m_sema);
-	}
-
-	void signal(int count)
-	{
-		while (count-- > 0)
-		{
-			sem_post(&m_sema);
-		}
-	}
-};
-
-
 #else
-
 #error Unsupported platform!
-
 #endif
 
 class silk__slim_semaphore {
 	std::atomic<int> m_count;
-	Semaphore m_sema;
+#if defined(_WIN32)
+	HANDLE s_;
+#elif defined(__MACH__)
+	semaphore_t s_;
+#elif defined(__unix__)
+	sem_t s_;
+#endif
 public:
 	silk__slim_semaphore(int initialCount = 0) : m_count(initialCount) {
+#if defined(_WIN32)
+		s_ = CreateSemaphore(NULL, initialCount, MAXLONG, NULL);
+#elif defined(__MACH__)
+		semaphore_create(mach_task_self(), &s_, SYNC_POLICY_FIFO, initialCount);
+#elif defined(__unix__)
+		sem_init(&s_, 0, initialCount);
+#endif	
+	}
+
+	~silk__slim_semaphore() {
+#if defined(_WIN32)
+		CloseHandle(s_);
+#elif defined(__MACH__)
+		semaphore_destroy(mach_task_self(), s_);
+#elif defined(__unix__)
+		sem_destroy(&s_);
+#endif
 	}
 
 	void wait() {
@@ -175,16 +75,35 @@ public:
 		oldCount = m_count.fetch_sub(1, std::memory_order_acquire);
 		
 		if (oldCount <= 0) {
-			m_sema.wait();
+#if defined(_WIN32)
+			WaitForSingleObject(s_, INFINITE);
+#elif defined(__MACH__)
+			semaphore_wait(s_);
+#elif defined(__unix__)
+			int rc;
+			do {
+				rc = sem_wait(&s_);
+			} while (rc == -1 && errno == EINTR);
+#endif
 		}
 	}
 
 	void signal(const int count = 1) {
 		const int old_count = m_count.fetch_add(count, std::memory_order_release);
-		const int to_release = -old_count < count ? -old_count : count;
+		int to_release = -old_count < count ? -old_count : count;
 
 		if (to_release > 0) {
-			m_sema.signal(to_release);
+#if defined(_WIN32)
+			ReleaseSemaphore(s_, to_release, NULL);
+#elif defined(__MACH__)
+			while (to_release-- > 0) {
+				semaphore_signal(s_);
+			}
+#elif defined(__unix__)
+			while (to_release-- > 0) {
+				sem_post(&s_);
+			}
+#endif
 		}
 	}
 };
