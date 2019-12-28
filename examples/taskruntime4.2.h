@@ -62,10 +62,7 @@ template<typename T = void> struct silk__coro_awaitable {
 	}
 
 	auto await_resume() noexcept { 
-		silk__coro_promise_base& p = awaitable.coro.promise();
-
-        p.state.store(silk__coro_state::destroyed, std::memory_order_release);
-		//awaitable.coro.promise().state.store(silk__coro_state::destroyed, std::memory_order_release);
+		awaitable.coro.promise().state.store(silk__coro_state::destroyed, std::memory_order_release);
 
 		return awaitable.result(); 
 	}
