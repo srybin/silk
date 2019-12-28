@@ -177,8 +177,8 @@ void silk__spawn(silk__independed_coro c) {
 
 void silk__schedule(silk__task* t) {
 	silk__frame* c = (silk__frame*)t;
-
-    c->coro.resume();
+	
+	c->coro.resume();
 
 	delete c;
 }
@@ -237,12 +237,11 @@ struct silk__io_read_awaitable {
 
 struct silk__io_accept_awaitable {
     int listening_socket;
-	
 	struct sockaddr_storage addr;
 	socklen_t socklen = sizeof(addr);
 	bool success;
-    int err;
-    int s;
+	int err;
+	int s;
    
     bool await_ready() noexcept {
 		s = accept(listening_socket, (struct sockaddr *)&addr, &socklen);
@@ -260,8 +259,8 @@ struct silk__io_accept_awaitable {
     auto await_resume() {
 		if ( success ) {
 			fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
-            return std::make_tuple(s, addr, err);
-        }
+			return std::make_tuple(s, addr, err);
+		}
 
 		s = accept(listening_socket, (struct sockaddr *)&addr, &socklen);
 
