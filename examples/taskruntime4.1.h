@@ -15,8 +15,7 @@ struct silk__final_awaitable {
 	bool await_ready() const noexcept { return false; }
 
 	template<typename T> void await_suspend(std::experimental::coroutine_handle<T> coro) {
-		silk__coro_promise_base& p = coro.promise();
-		p.continuation.resume();
+		coro.promise().continuation.resume();
 	}
 
 	void await_resume() noexcept {}
