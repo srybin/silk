@@ -53,7 +53,7 @@ int main() {
 
     listen(listensockfd, SOMAXCONN);
 
-    auto log_about_new_connection = []( int s, struct sockaddr_storage addr ) -> silk__coro<> {
+    auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk__coro<> {
         char ip[NI_MAXHOST];
         char port[NI_MAXSERV];
          
@@ -77,7 +77,7 @@ int main() {
             auto[ s, addr, err ] = co_await silk__accept_async( listening_socket );
             
             if ( s ) {
-                silk__coro<> c = silk__spawn( log_about_new_connection( s, addr ) );
+                silk__coro<> c = silk__spawn( log_new_connection( s, addr ) );
            
                 silk__spawn( process_connection( s ) );
            
