@@ -308,6 +308,26 @@ void silk__enqueue( const int worker_id, silk__task* t ) {
     silk__sem->signal(silk__workers_count);
 }
 
+inline void silk__spawn_affinity(const int worker_id, silk__task* t) {
+	silk__wcontext* c = silk__wcontexts[worker_id];
+
+	t->prev = t->next = nullptr;
+    
+	c->affinity_sync->lock();
+
+	if (!c->affinity_head) {
+		c->affinity_tail = c->affinity_head = t;
+	} else {
+		t->next = c->affinity_head;
+		c->affinity_head->prev = t;
+		c->affinity_head = t;
+	}
+
+	c->affinity_sync->unlock();
+
+	silk__sem->signal(silk__workers_count);
+}
+
 void silk__enqueue_affinity( const int worker_id, silk__task* t ) {
 	silk__wcontext* c = silk__wcontexts[worker_id];
 
