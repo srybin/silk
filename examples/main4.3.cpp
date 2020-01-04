@@ -69,7 +69,7 @@ int main() {
 	silk__init_pool(silk__schedule, silk__makecontext);
 
 	for (int i = 0; i < 1000000; i++) {
-		silk__spawn( c0() );
+		c0();
 	}
 
 	silk__join_main_thread_2_pool(silk__schedule);

@@ -129,7 +129,7 @@ inline silk__coro<void> silk__coro_promise<void>::get_return_object() noexcept {
 
 struct silk__independed_coro_promise {
 	silk__independed_coro get_return_object() noexcept;
-	auto initial_suspend() { return std::experimental::suspend_always{}; }
+	auto initial_suspend() { return std::experimental::suspend_never{}; }
 
 	auto final_suspend() { return std::experimental::suspend_never{}; }
 
@@ -154,10 +154,6 @@ struct silk__independed_coro {
 
 inline silk__independed_coro silk__independed_coro_promise::get_return_object() noexcept {
 	return silk__independed_coro{ std::experimental::coroutine_handle<silk__independed_coro_promise>::from_promise(*this) };
-}
-
-void silk__spawn(silk__independed_coro c) {
-	silk__spawn(c.coro);
 }
 
 void silk__schedule(silk__task* t) {
