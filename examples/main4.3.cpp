@@ -1,115 +1,82 @@
-#include <sys/socket.h>
-#include <sys/errno.h>
-#include <netdb.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/event.h>
-#include <strings.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <iostream>
 #include "./taskruntime4.2.h"
 
-silk__independed_coro process_connection(const int s) {
-    char buf[1024];
-    int n;
-         
-    while (1) {
-        n = co_await silk__read_async(s, buf, 1024);
+silk__coro<int> c2(const int i) {
+	co_await silk__yield();
 
-        if (n <= 0) {
-            printf("[%d] process_connection(%d) has been disconnected...\n", silk__current_worker_id, s);
-            close(s);
+	co_return i;
+}
 
-            co_return;
-        }
+silk__coro<int> c3(const int i) {
+	auto r = co_await c2(i);
 
-        printf("[%d] process_connection(%d) [%d] %s\n", silk__current_worker_id, s, n, buf);
-    }
+	co_return r + 1;
+}
+
+silk__coro<int> c33(const int i) {
+	return c3(i);
+}
+
+silk__coro<> c31() {
+	silk__coro<int> c0 = c3(2);
+
+	auto r = co_await c0;
+
+	printf("%d c31() -> %d\n", silk__current_worker_id, r);
+}
+
+std::atomic<int> count;
+
+silk__independed_coro c0() {
+	co_await silk__yield();
+
+	silk__coro<int> c0 = c3( 2 );
+
+	auto r0 = co_await c3( 1 );
+
+	auto r1 = co_await c0;
+	
+	silk__coro<> c1 = c31();
+
+	co_await c31();
+
+	co_await c1;
+
+	silk__coro<int> c02 = c33( 4 );	
+
+	auto r2 = co_await c33( 3 );
+
+	auto r3 = co_await c02;
+
+	auto completes_synchronously = []() -> silk__coro<int> {
+		co_return 1;
+	};
+
+	silk__coro<int> c03 = completes_synchronously();
+
+	int r4 = co_await completes_synchronously();
+
+	auto r5 = co_await c03;
+
+	printf("%d c0() -> %d %d %d %d %d %d\n", silk__current_worker_id, r0, r1, r2, r3, r4, r5);
+
+	count.fetch_add(1, std::memory_order_acquire);
 }
 
 int main() {
-    silk__init_pool(silk__schedule, silk__makecontext);
+	silk__init_pool(silk__schedule, silk__makecontext);
 
-    struct addrinfo hints, *ser;
+	for (int i = 0; i < 1000000; i++) {
+		silk__spawn( c0() );
+	}
 
-    memset(&hints, 0, sizeof hints);
+	silk__join_main_thread_2_pool(silk__schedule);
+	
+	sleep(3);
 
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-
-    getaddrinfo(NULL, "3491", & hints, &ser);
-
-    int listensockfd = socket(ser->ai_family, ser->ai_socktype, ser->ai_protocol);
-
-    fcntl(listensockfd, F_SETFL, fcntl(listensockfd, F_GETFL, 0) | O_NONBLOCK);
-
-    int yes = 1;
-    setsockopt(listensockfd, SOL_SOCKET, SO_REUSEPORT, & yes, sizeof(int));
-
-    bind(listensockfd, ser-> ai_addr, ser-> ai_addrlen);
-
-    listen(listensockfd, SOMAXCONN);
-
-    auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk__coro<> {
-        char ip[NI_MAXHOST];
-        char port[NI_MAXSERV];
-         
-        getnameinfo(
-            (struct sockaddr *)&addr,
-            sizeof(addr),
-            ip,
-            sizeof(ip),
-            port,
-            sizeof(port),
-            NI_NUMERICHOST | NI_NUMERICSERV
-            );
-        
-        printf( "[%d] New connection: %s:%s, %d...\n", silk__current_worker_id, ip, port, s );
-
-        co_return;
-    };
-
-    auto server = [&]( int listening_socket ) -> silk__independed_coro {
-        while ( 1 ) {
-            auto[ s, addr, err ] = co_await silk__accept_async( listening_socket );
-            
-            if ( s ) {
-                silk__coro<> c = silk__spawn( log_new_connection( s, addr ) );
-           
-                silk__spawn( process_connection( s ) );
-           
-                co_await c;
-            }
-        }
-    };
-
-    silk__spawn( server( listensockfd ) );
-    
-    int n = 0;
-    kq = kqueue();
-    struct kevent evSet;
-    struct kevent evList[1024];
-    
-    while (1) {
-        int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
-
-        for (int i = 0; i < nev; i++) {  //run pending...
-            if (evList[i].ident == listensockfd) {
-                silk__schedule( (silk__frame*)evList[i].udata ); //silk__spawn( (silk__frame*)evList[i].udata );
-            }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_frame* frame = (silk__io_read_frame*) evList[i].udata;
-
-                memset(frame->buf, 0, frame->nbytes);
-
-                frame->n = evList[i].flags & EV_EOF ? 0 : read(evList[i].ident, frame->buf, frame->nbytes);
-
-                silk__spawn(frame->coro);
-            }
-        }
-    }
-
-    return 0;
+	printf("coros: %d\n", count.load());
+	
+	return 0;
 }

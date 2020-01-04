@@ -199,40 +199,24 @@ auto silk__yield() {
 
 int kq;
 
-typedef struct silk__io_read_frame_t {
-    std::experimental::coroutine_handle<> coro; 
-    int nbytes;
-    char* buf;
-    int n;
-} silk__io_read_frame;
-
 struct silk__io_read_awaitable {
     char* buf;
     int nbytes;
     int socket;
 
-    silk__io_read_frame* frame;
+	int n;
+	std::experimental::coroutine_handle<> coro;
 
     constexpr bool await_ready() const noexcept { return false; }
         
-    void await_suspend(std::experimental::coroutine_handle<> coro) {
-        frame = new silk__io_read_frame();
-        frame->coro = coro;
-        frame->nbytes = nbytes;
-        frame->buf = buf;
-        
+    void await_suspend(std::experimental::coroutine_handle<> c) {
+        coro = c;
         struct kevent evSet;
-        EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, frame);
+        EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, this);
         assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
     }
 
-    auto await_resume() {
-        int n = frame->n;
-
-        delete frame;
-        
-        return n; 
-    }
+    auto await_resume() { return n; }
 };
 
 struct silk__io_accept_awaitable {

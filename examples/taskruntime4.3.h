@@ -2,23 +2,20 @@
 #include "./../src/silk_pool.h"
 #include <sys/types.h>
 #include <sys/event.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <fcntl.h>
 
 template<typename T> struct silk__coro_promise;
 template<typename T> struct silk__coro;
 struct silk__independed_coro;
 
+enum silk__coro_state { unspawned, awaitable, completed };
+
 struct silk__coro_promise_base {
+	std::atomic<silk__coro_state> state = silk__coro_state::unspawned;
+
 	std::experimental::coroutine_handle<> continuation;
-};
-
-struct silk__final_awaitable {
-	bool await_ready() const noexcept { return false; }
-
-	template<typename T> void await_suspend(std::experimental::coroutine_handle<T> coro) {
-		coro.promise().continuation.resume();
-	}
-
-	void await_resume() noexcept {}
 };
 
 struct silk__frame : public silk__task {
@@ -31,14 +28,33 @@ void silk__spawn(std::experimental::coroutine_handle<> coro) {
 	silk__spawn(silk__current_worker_id, (silk__task*) new silk__frame(coro));
 }
 
+struct silk__final_awaitable {
+	bool await_ready() const noexcept { return false; }
+
+	template<typename T> void await_suspend(std::experimental::coroutine_handle<T> coro) {
+		silk__coro_promise_base& p = coro.promise();
+
+		if (p.state.exchange(silk__coro_state::completed, std::memory_order_release) == silk__coro_state::awaitable) {
+			silk__spawn(p.continuation);
+		}
+	}
+
+	void await_resume() noexcept {}
+};
+
 template<typename T = void> struct silk__coro_awaitable {
 	silk__coro<T>& awaitable;
 
-	bool await_ready() noexcept { return awaitable.coro.done(); }
+	bool await_ready() noexcept { return false; }
 
 	void await_suspend(std::experimental::coroutine_handle<> coro) noexcept {
-		awaitable.coro.promise().continuation = coro;
-		awaitable.coro.resume();
+		silk__coro_promise_base& p = awaitable.coro.promise();
+
+		p.continuation = coro;
+
+		if (p.state.exchange(silk__coro_state::awaitable, std::memory_order_release) == silk__coro_state::completed) {
+			silk__spawn(coro);
+		}
 	}
 
 	auto await_resume() noexcept { return awaitable.result(); }
@@ -50,7 +66,7 @@ template<typename T> struct silk__coro_promise : public silk__coro_promise_base 
 
 	silk__coro<T> get_return_object() noexcept;
 
-	auto initial_suspend() { return std::experimental::suspend_always(); }
+	auto initial_suspend() { return std::experimental::suspend_never{}; }
 
 	auto final_suspend() { return silk__final_awaitable{}; }
 
@@ -70,7 +86,7 @@ template<typename T> struct silk__coro_promise : public silk__coro_promise_base 
 template<> struct silk__coro_promise<void> : public silk__coro_promise_base {
 	silk__coro_promise() noexcept = default;
 	silk__coro<void> get_return_object() noexcept;
-	auto initial_suspend() { return std::experimental::suspend_always{}; }
+	auto initial_suspend() { return std::experimental::suspend_never{}; }
 
 	auto final_suspend() { return silk__final_awaitable{}; }
 
@@ -90,12 +106,12 @@ template<typename T = void> struct silk__coro {
 
 	std::experimental::coroutine_handle<silk__coro_promise<T>> coro;
 
-	silk__coro(std::experimental::coroutine_handle<silk__coro_promise<T>> c) : coro(c) {
-	}
+	silk__coro(std::experimental::coroutine_handle<silk__coro_promise<T>> c) : coro(c) { }
 
 	~silk__coro() {
-		if (coro && coro.done())
+		if (coro && coro.done()) {
 			coro.destroy();
+		}
 	}
 
 	const T result() { return coro.promise().result(); }
@@ -146,7 +162,7 @@ void silk__spawn(silk__independed_coro c) {
 
 void silk__schedule(silk__task* t) {
 	silk__frame* c = (silk__frame*)t;
-
+	
 	c->coro.resume();
 
 	delete c;
@@ -164,4 +180,69 @@ struct silk__yield_awaitable {
 
 auto silk__yield() {
 	return silk__yield_awaitable{};
+}
+
+int kq;
+
+struct silk__io_read_awaitable {
+    char* buf;
+    int nbytes;
+    int socket;
+
+	int n;
+	std::experimental::coroutine_handle<> coro;
+
+    constexpr bool await_ready() const noexcept { return false; }
+        
+    void await_suspend(std::experimental::coroutine_handle<> c) {
+        coro = c;
+        struct kevent evSet;
+        EV_SET(&evSet, socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, this);
+        assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
+    }
+
+    auto await_resume() { return n; }
+};
+
+struct silk__io_accept_awaitable {
+    int listening_socket;
+	struct sockaddr_storage addr;
+	socklen_t socklen = sizeof(addr);
+	bool success;
+	int err;
+	int s;
+   
+    bool await_ready() noexcept {
+		s = accept(listening_socket, (struct sockaddr *)&addr, &socklen);
+        success = !(s == -1 && errno == EAGAIN);
+        err = errno;
+        return success;
+    }
+       
+    void await_suspend(std::experimental::coroutine_handle<> coro) {
+		struct kevent evSet;
+        EV_SET(&evSet, listening_socket, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, new silk__frame(coro));
+        assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
+    }
+   
+    auto await_resume() {
+		if ( success ) {
+			fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
+			return std::make_tuple(s, addr, err);
+		}
+
+		s = accept(listening_socket, (struct sockaddr *)&addr, &socklen);
+
+		fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
+
+		return std::make_tuple(s, addr, errno);
+    }
+};
+
+auto silk__read_async(const int socket, char* buf, const int nbytes) {
+    return silk__io_read_awaitable {buf, nbytes, socket};
+}
+
+auto silk__accept_async( const int listening_socket ) {
+    return silk__io_accept_awaitable { listening_socket };
 }
