@@ -13,11 +13,11 @@ int main() {
 	silk__init_pool(silk__schedule, silk__makecontext);
 
 	for (int i = 0; i < 30000; i++) {
-		silk__spawn(c);
+		silk__spawn( c );
 	}
 
 	for (int i = 0; i < 30000; i++) {
-		silk__spawn([=]() { c1(i); });
+		silk__spawn2( c1( i ) );
 	}
 
 	silk__join_main_thread_2_pool(silk__schedule);

@@ -54,7 +54,11 @@ Directory "examples" has 3 examples of task-based runtime:
 3. [taskruntime2.h](examples/taskruntime2.h)/[main2.2.cpp](examples/main2.2.cpp) implements simple TCP server (FreeBSD/kqueue/taskruntime2.h - continuation passing).
 4. [taskruntime3.1.h](examples/taskruntime3.1.h)/[taskruntime3.2.h](examples/taskruntime3.2.h)/[main3.1.cpp](examples/main3.1.cpp) implements simple TCP server with only async read, where tasks are coroutines (taskruntime3.2.h - thread-bound coroutines were after first calling, taskruntime3.1.h - not thread-bound coroutines).
 5. [taskruntime3.1.h](examples/taskruntime3.1.h)/[taskruntime3.2.h](examples/taskruntime3.2.h)/[main3.2cpp](examples/main3.2.cpp) implements simple TCP server with async accept and async read, where tasks are coroutines (taskruntime3.2.h - thread-bound coroutines were after first calling, taskruntime3.1.h - not thread-bound coroutines).
-6. [taskruntime4.h](examples/taskruntime4.h)/[main4.cpp](examples/main4.cpp) implements simple TCP server (FreeBSD/kqueue), where task is coroutines TS.
+6. [taskruntime4.1.h](examples/taskruntime4.1.h)/[main4.1.cpp](examples/main4.1.cpp), where tasks are coroutines TS. Each coroutine does not start until the coroutine is awaited like in cppcoro.
+7. [taskruntime4.2.h](examples/taskruntime4.2.h)/[main4.2.cpp](examples/main4.2.cpp), where tasks are coroutines TS. Each coroutine can be spawned via co_await or using spawn function for other courutine and later wait to end of spawned coroutine.
+8. [taskruntime4.3.h](examples/taskruntime4.3.h)/[main4.3.cpp](examples/main4.3.cpp), where tasks are coroutines TS. Each coroutine start immediately and when child coroutine suspend, parent coroutine gets control back. Later child coroutine can be resumed while parernt coroutine still 
+9. [taskruntime4.2.h](examples/taskruntime4.2.h)/[main4.4.cpp](examples/main4.4.cpp) implements simple TCP server (FreeBSD/kqueue), where task is coroutines TS.
+10. [taskruntime4.3.h](examples/taskruntime4.3.h)/[main4.5.cpp](examples/main4.5.cpp) implements simple TCP server (FreeBSD/kqueue), where task is coroutines TS.
 
 ## Roadmap:
 - [x] Separete silk.h on 2 files: silk.h and silk_pool.h because it is usefull take only task container primitifs for implementing own thread pool.

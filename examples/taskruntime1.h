@@ -15,6 +15,8 @@ inline void silk__spawn(std::function<void()> t) {
 	silk__spawn(silk__current_worker_id, (silk__task*) f);
 }
 
+#define silk__spawn2( ex ) silk__spawn([=]() { ex; })
+
 void silk__schedule(silk__task* t) {
 	silk__func* func_container = (silk__func*)t;
 	
