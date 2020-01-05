@@ -54,6 +54,8 @@ int main() {
     listen(listensockfd, SOMAXCONN);
 
     auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk__coro<> {
+        co_await silk__yield();
+        
         char ip[NI_MAXHOST];
         char port[NI_MAXSERV];
          

@@ -52,7 +52,8 @@ template<typename T = void> struct silk__coro_awaitable {
 
 		p.continuation = coro;
 
-		if (p.state.exchange(silk__coro_state::awaitable, std::memory_order_release) == silk__coro_state::completed) {
+		silk__coro_state s = silk__coro_state::unspawned;
+		if (!p.state.compare_exchange_strong(s, silk__coro_state::awaitable, std::memory_order_release)) {
 			silk__spawn(coro);
 		}
 	}

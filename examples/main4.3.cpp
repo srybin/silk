@@ -37,6 +37,8 @@ silk__independed_coro c0() {
 	auto r0 = co_await c3( 1 );
 
 	auto r1 = co_await c0;
+
+	auto r2 = co_await c0;
 	
 	silk__coro<> c1 = c31();
 
@@ -46,9 +48,9 @@ silk__independed_coro c0() {
 
 	silk__coro<int> c02 = c33( 4 );	
 
-	auto r2 = co_await c33( 3 );
+	auto r3 = co_await c33( 3 );
 
-	auto r3 = co_await c02;
+	auto r4 = co_await c02;
 
 	auto completes_synchronously = []() -> silk__coro<int> {
 		co_return 1;
@@ -56,11 +58,11 @@ silk__independed_coro c0() {
 
 	silk__coro<int> c03 = completes_synchronously();
 
-	int r4 = co_await completes_synchronously();
+	int r5 = co_await completes_synchronously();
 
-	auto r5 = co_await c03;
+	auto r6 = co_await c03;
 
-	printf("%d c0() -> %d %d %d %d %d %d\n", silk__current_worker_id, r0, r1, r2, r3, r4, r5);
+	printf("%d c0() -> %d %d %d %d %d %d %d\n", silk__current_worker_id, r0, r1, r2, r3, r4, r5, r6);
 
 	count.fetch_add(1, std::memory_order_acquire);
 }
