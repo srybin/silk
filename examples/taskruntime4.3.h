@@ -253,7 +253,7 @@ struct silk__io_connect_awaitable {
 		peer.sin_addr.s_addr = inet_addr( host );
 		result = connect( s, ( struct sockaddr * )&peer, sizeof( peer ) );
 		err = errno;
-		return result == 0;
+		return result == 0 || (result = -1 && err != EINPROGRESS);
     }
        
     void await_suspend(std::experimental::coroutine_handle<> coro) {
