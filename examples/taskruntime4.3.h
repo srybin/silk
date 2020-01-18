@@ -236,10 +236,65 @@ struct silk__io_accept_awaitable {
     }
 };
 
+struct silk__io_connect_awaitable {
+	char* host;
+	int port;
+
+	int result;
+	int err;
+	int s;
+
+    bool await_ready() noexcept {
+		s = socket( AF_INET, SOCK_STREAM, 0 );
+		fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
+		struct sockaddr_in peer;
+		peer.sin_family = AF_INET;
+        peer.sin_port = htons( port );
+		peer.sin_addr.s_addr = inet_addr( host );
+		result = connect( s, ( struct sockaddr * )&peer, sizeof( peer ) );
+		err = errno;
+		return result == 0;
+    }
+       
+    void await_suspend(std::experimental::coroutine_handle<> coro) {
+		struct kevent evSet;
+        EV_SET(&evSet, s, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, new silk__frame(coro));
+        assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
+    }
+   
+    auto await_resume() {
+		return std::make_tuple(s, result, err);
+    }
+};
+
+struct silk__io_write_awaitable {
+	int s;
+	char* buf;
+	int bytes;
+
+    bool await_ready() noexcept { return false; }
+       
+    void await_suspend(std::experimental::coroutine_handle<> coro) {
+		struct kevent evSet;
+        EV_SET(&evSet, s, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, new silk__frame(coro));
+        assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
+    }
+   
+    auto await_resume() { return write(s, buf, bytes); }
+};
+
 auto silk__read_async(const int socket, char* buf, const int nbytes) {
     return silk__io_read_awaitable {buf, nbytes, socket};
 }
 
 auto silk__accept_async( const int listening_socket ) {
     return silk__io_accept_awaitable { listening_socket };
+}
+
+auto silk__connect_async( char* host, int port) {
+	return silk__io_connect_awaitable { host, port };
+}
+
+auto silk__write_async(int socket, char* buf, int bytes) {
+	return silk__io_write_awaitable{ socket, buf, bytes };
 }
