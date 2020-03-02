@@ -5,9 +5,11 @@ Silk is lightweight engine for creating task-based runtime. Silk define building
 silk__task
 silk__wcontext
 silk__wcontext** silk__wcontexts
+```
 
 and
 
+```C++
 silk__spawn()
 silk__fetch()
 silk__steal()
