@@ -188,12 +188,12 @@ public:
 	}
 };
 
-typedef struct silk__task_t {
-	silk__task_t* next;
-	silk__task_t* prev;
-} silk__task;
+struct silk__task {
+	silk__task* next;
+	silk__task* prev;
+};
 
-typedef struct silk__wcontext_t {
+struct silk__wcontext {
 	silk__fast_random* random;
 	silk__spin_lock* affinity_sync;
 	silk__task* affinity_tail;
@@ -201,7 +201,7 @@ typedef struct silk__wcontext_t {
 	silk__spin_lock* sync;
 	silk__task* tail;
 	silk__task* head;
-} silk__wcontext;
+};
 
 int silk__workers_count;
 silk__wcontext** silk__wcontexts;
