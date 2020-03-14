@@ -11,21 +11,21 @@
 #include <unistd.h>
 #include "./taskruntime2.h"
 
-void silk__readed( const int socket, char* buf, const int nbytes ) {
+void process_connection( const int socket, char* buf, const int nbytes ) {
     if (nbytes == 0 || (nbytes < 0 && errno == ECONNRESET)) {
         close(socket);
     } else if (nbytes < 0) {
-        printf("[%d] silk__readed(%d) error: %d\n", silk__current_worker_id, socket, errno);
+        printf("[%d] process_connection(%d) error: %d\n", silk::current_worker_id, socket, errno);
         close(socket);
     } else {
-        printf("[%d] silk__readed(%d) [%d] %s\n", silk__current_worker_id, socket, nbytes, buf);
+        printf("[%d] process_connection(%d) [%d] %s\n", silk::current_worker_id, socket, nbytes, buf);
 
-        silk__read_async(socket, buf, 1024, silk__readed);
+        silk::demo_runtime_2::read_async(socket, buf, 1024, process_connection);
     }
 }
 
 int main() {
-    silk__init_pool(silk__schedule, silk__makeuwcontext);
+    silk::init_pool(silk::demo_runtime_2::schedule, silk::demo_runtime_2::makeuwcontext);
 
     struct addrinfo hints, *ser;
 
@@ -48,17 +48,17 @@ int main() {
 
     listen(listensockfd, SOMAXCONN);
 
-    kq = kqueue();
+    silk::demo_runtime_2::kq = kqueue();
     struct kevent evSet;
     struct kevent evList[1024];
 
     EV_SET(&evSet, listensockfd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-    assert(-1 != kevent(kq, & evSet, 1, NULL, 0, NULL));
+    assert(-1 != kevent(silk::demo_runtime_2::kq, & evSet, 1, NULL, 0, NULL));
     
     int n = 0;
 
     while (1) {
-        int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
+        int nev = kevent(silk::demo_runtime_2::kq, NULL, 0, evList, 1024, NULL); //io poll...
 
         for (int i = 0; i < nev; i++) {  //run pending...
             if (evList[i].ident == listensockfd) {
@@ -77,10 +77,10 @@ int main() {
 
                     fcntl(clientsockfd, F_SETFL, fcntl(clientsockfd, F_GETFL, 0) | O_NONBLOCK);
 
-                    silk__read_async(clientsockfd, new char[1024], 1024, silk__readed);
+                    silk::demo_runtime_2::read_async(clientsockfd, new char[1024], 1024, process_connection);
                 }
             }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_frame* frame = (silk__io_read_frame*) evList[i].udata;
+                silk::demo_runtime_2::io_read_frame* frame = (silk::demo_runtime_2::io_read_frame*) evList[i].udata;
 
                 memset(frame->buf, 0, frame->nbytes);
 
@@ -88,7 +88,7 @@ int main() {
 
                 frame->continuation->set_read_result(evList[i].ident, frame->buf, n);
 
-                spawn(*frame->continuation);
+                silk::demo_runtime_2::spawn(*frame->continuation);
 
                 delete frame;
             }

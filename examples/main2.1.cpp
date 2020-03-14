@@ -8,7 +8,7 @@ long serial_fib(const long n) {
 	return serial_fib(n - 1) + serial_fib(n - 2);
 }
 
-struct FibContinuation : public task {
+struct FibContinuation : public silk::demo_runtime_2::task {
 	long* const sum;
 	long x, y;
 	FibContinuation(long* sum_) : sum(sum_) {
@@ -19,7 +19,7 @@ struct FibContinuation : public task {
 	}
 };
 
-struct FibTask : public task {
+struct FibTask : public silk::demo_runtime_2::task {
 	long n;
 	long* sum;
 	FibTask(long n_, long* sum_) : n(n_), sum(sum_) {
@@ -42,14 +42,14 @@ struct FibTask : public task {
 };
 
 int main() {
-    silk__init_pool(silk__schedule, silk__makeuwcontext);
+    silk::init_pool(silk::demo_runtime_2::schedule, silk::demo_runtime_2::makeuwcontext);
 
     const auto start = std::chrono::high_resolution_clock::now();
     
     long sum;
-    spawn( *new FibTask(45, &sum) );
+    silk::demo_runtime_2::spawn( *new FibTask(45, &sum) );
     
-    silk__join_main_thread_2_pool(silk__schedule);
+    silk::join_main_thread_2_pool(silk::demo_runtime_2::schedule);
     
     const auto end = std::chrono::high_resolution_clock::now();
 
