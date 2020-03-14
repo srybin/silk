@@ -12,28 +12,28 @@
 #include <arpa/inet.h>
 #include "./taskruntime4.3.h"
 
-silk__independed_coro process_connection(const int s) {
+silk::demo_runtime_4_3::independed_task process_connection(const int s) {
     char buf[1024];
     int n;
          
     while (1) {
-        n = co_await silk__read_async(s, buf, 1024);
+        n = co_await silk::demo_runtime_4_3::read_async(s, buf, 1024);
 
         if (n <= 0) {
-            printf("[%d] process_connection(%d) has been disconnected...\n", silk__current_worker_id, s);
+            printf("[%d] process_connection(%d) has been disconnected...\n", silk::current_worker_id, s);
             close(s);
 
             co_return;
         }
 
-        printf("[%d] process_connection(%d) [%d] %s\n", silk__current_worker_id, s, n, buf);
+        printf("[%d] process_connection(%d) [%d] %s\n", silk::current_worker_id, s, n, buf);
     }
 }
 
 int main() {
-    silk__init_pool(silk__schedule, silk__makecontext, 1);
+    silk::init_pool(silk::demo_runtime_4_3::schedule, silk::makecontext, 1);
 
-    kq = kqueue();
+    silk::demo_runtime_4_3::kq = kqueue();
 
     struct addrinfo hints, *ser;
 
@@ -56,8 +56,8 @@ int main() {
 
     listen(listensockfd, SOMAXCONN);
 
-    auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk__coro<> {
-        co_await silk__yield();
+    auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk::demo_runtime_4_3::task<> {
+        co_await silk::demo_runtime_4_3::yield();
         
         char ip[NI_MAXHOST];
         char port[NI_MAXSERV];
@@ -72,14 +72,14 @@ int main() {
             NI_NUMERICHOST | NI_NUMERICSERV
             );
         
-        printf( "[%d] New connection: %s:%s, %d...\n", silk__current_worker_id, ip, port, s );
+        printf( "[%d] New connection: %s:%s, %d...\n", silk::current_worker_id, ip, port, s );
 
         co_return;
     };
 
-    auto server = [&]( int listening_socket ) -> silk__independed_coro {
+    auto server = [&]( int listening_socket ) -> silk::demo_runtime_4_3::independed_task {
         while ( 1 ) {
-            auto[ s, addr, err ] = co_await silk__accept_async( listening_socket );
+            auto[ s, addr, err ] = co_await silk::demo_runtime_4_3::accept_async( listening_socket );
             
             if ( s ) {
                 process_connection( s );
@@ -89,13 +89,13 @@ int main() {
         }
     };
 
-    auto client = [&] () -> silk__independed_coro {
-        auto[ s, result, err ] = co_await silk__connect_async( "127.0.0.1", 3491 );
+    auto client = [&] () -> silk::demo_runtime_4_3::independed_task {
+        auto[ s, result, err ] = co_await silk::demo_runtime_4_3::connect_async( "127.0.0.1", 3491 );
 
         char* m = "C3333333333333333333333333333333333333333333333";
 
         for ( int i = 0; i < 100000; i++ ) {
-            co_await silk__write_async( s, m, 48 );
+            co_await silk::demo_runtime_4_3::write_async( s, m, 48 );
         }
 
         close( s );
@@ -113,21 +113,21 @@ int main() {
     struct kevent evList[1024];
 
     while ( 1 ) {
-        silk__join_main_thread_2_pool( silk__schedule );
+        silk::join_main_thread_2_pool( silk::demo_runtime_4_3::schedule );
 
-        int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
+        int nev = kevent(silk::demo_runtime_4_3::kq, NULL, 0, evList, 1024, NULL); //io poll...
 
         for (int i = 0; i < nev; i++) {  //run pending...
             if (evList[i].ident == listensockfd || evList[i].filter == EVFILT_WRITE) {
-                silk__spawn( silk__current_worker_id, (silk__frame*) evList[i].udata );
+                silk::spawn( silk::current_worker_id, (silk::demo_runtime_4_3::frame*) evList[i].udata );
             }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_awaitable* frame = (silk__io_read_awaitable*) evList[i].udata;
+                silk::demo_runtime_4_3::io_read_awaitable* frame = (silk::demo_runtime_4_3::io_read_awaitable*) evList[i].udata;
 
                 memset(frame->buf, 0, frame->nbytes);
 
                 frame->n = evList[i].flags & EV_EOF ? 0 : read(evList[i].ident, frame->buf, frame->nbytes);
 
-                silk__spawn(frame->coro);
+                silk::demo_runtime_4_3::spawn(frame->coro);
             }
         }
     }
