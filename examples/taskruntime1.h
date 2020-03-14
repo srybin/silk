@@ -3,28 +3,32 @@
 #include "./../src/silk_pool.h"
 #include <functional>
 
-typedef struct silk__func_t : silk__task {
-	std::function<void()>* func;
-} silk__func;
-
-inline void silk__spawn(std::function<void()> t) {
-	silk__func* f = new silk__func();
-
-	f->func = new std::function<void()>(t);
-
-	silk__spawn(silk__current_worker_id, (silk__task*) f);
-}
-
-#define silk__spawn2( ex ) silk__spawn([=]() { ex; })
-
-void silk__schedule(silk__task* t) {
-	silk__func* func_container = (silk__func*)t;
-	
-	std::function<void()>* f = func_container->func;
-	
-	(*f)();
-	
-	delete f;
-
-	delete t;
+namespace silk {
+    namespace demo_runtime_1 {
+        struct func : silk::task {
+        	std::function<void()>* func;
+        };
+        
+        inline void spawn(std::function<void()> t) {
+        	func* f = new func();
+        
+        	f->func = new std::function<void()>(t);
+        
+        	silk::spawn(silk::current_worker_id, (silk::task*) f);
+		}
+        
+        #define spawn2( ex ) spawn([=]() { ex; })
+        
+        void schedule(silk::task* t) {
+        	func* func_container = (func*)t;
+        	
+        	std::function<void()>* f = func_container->func;
+        	
+        	(*f)();
+        	
+        	delete f;
+        
+        	delete t;
+		}
+    }
 }

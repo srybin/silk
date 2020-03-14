@@ -10,17 +10,17 @@ void c1(const int i) {
 }
 
 int main() {
-	silk__init_pool(silk__schedule, silk__makecontext);
+	silk::init_pool(silk::demo_runtime_1::schedule, silk::makecontext);
 
 	for (int i = 0; i < 30000; i++) {
-		silk__spawn( c );
+		silk::demo_runtime_1::spawn( c );
 	}
 
 	for (int i = 0; i < 30000; i++) {
-		silk__spawn2( c1( i ) );
+		silk::demo_runtime_1::spawn2( c1( i ) );
 	}
 
-	silk__join_main_thread_2_pool(silk__schedule);
+	silk::join_main_thread_2_pool(silk::demo_runtime_1::schedule);
 
 	return 0;
 }
