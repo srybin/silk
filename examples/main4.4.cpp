@@ -11,26 +11,26 @@
 #include <unistd.h>
 #include "./taskruntime4.2.h"
 
-silk__independed_coro process_connection(const int s) {
+silk::demo_runtime_4_2::independed_task process_connection(const int s) {
     char buf[1024];
     int n;
          
     while (1) {
-        n = co_await silk__read_async(s, buf, 1024);
+        n = co_await silk::demo_runtime_4_2::read_async(s, buf, 1024);
 
         if (n <= 0) {
-            printf("[%d] process_connection(%d) has been disconnected...\n", silk__current_worker_id, s);
+            printf("[%d] process_connection(%d) has been disconnected...\n", silk::current_worker_id, s);
             close(s);
 
             co_return;
         }
 
-        printf("[%d] process_connection(%d) [%d] %s\n", silk__current_worker_id, s, n, buf);
+        printf("[%d] process_connection(%d) [%d] %s\n", silk::current_worker_id, s, n, buf);
     }
 }
 
 int main() {
-    silk__init_pool(silk__schedule, silk__makecontext);
+    silk::init_pool(silk::demo_runtime_4_2::schedule, silk::makecontext);
 
     struct addrinfo hints, *ser;
 
@@ -53,7 +53,7 @@ int main() {
 
     listen(listensockfd, SOMAXCONN);
 
-    auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk__coro<> {
+    auto log_new_connection = []( int s, struct sockaddr_storage addr ) -> silk::demo_runtime_4_2::task<> {
         char ip[NI_MAXHOST];
         char port[NI_MAXSERV];
          
@@ -67,46 +67,46 @@ int main() {
             NI_NUMERICHOST | NI_NUMERICSERV
             );
         
-        printf( "[%d] New connection: %s:%s, %d...\n", silk__current_worker_id, ip, port, s );
+        printf( "[%d] New connection: %s:%s, %d...\n", silk::current_worker_id, ip, port, s );
 
         co_return;
     };
 
-    auto server = [&]( int listening_socket ) -> silk__independed_coro {
+    auto server = [&]( int listening_socket ) -> silk::demo_runtime_4_2::independed_task {
         while ( 1 ) {
-            auto[ s, addr, err ] = co_await silk__accept_async( listening_socket );
+            auto[ s, addr, err ] = co_await silk::demo_runtime_4_2::accept_async( listening_socket );
             
             if ( s ) {
-                silk__coro<> c = silk__spawn( log_new_connection( s, addr ) );
+                silk::demo_runtime_4_2::task<> c = silk::demo_runtime_4_2::spawn( log_new_connection( s, addr ) );
            
-                silk__spawn( process_connection( s ) );
+                silk::demo_runtime_4_2::spawn( process_connection( s ) );
            
                 co_await c;
             }
         }
     };
 
-    silk__spawn( server( listensockfd ) );
+    silk::demo_runtime_4_2::spawn( server( listensockfd ) );
     
     int n = 0;
-    kq = kqueue();
+    silk::demo_runtime_4_2::kq = kqueue();
     struct kevent evSet;
     struct kevent evList[1024];
     
     while (1) {
-        int nev = kevent(kq, NULL, 0, evList, 1024, NULL); //io poll...
+        int nev = kevent(silk::demo_runtime_4_2::kq, NULL, 0, evList, 1024, NULL); //io poll...
 
         for (int i = 0; i < nev; i++) {  //run pending...
             if (evList[i].ident == listensockfd) {
-                silk__schedule( (silk__frame*)evList[i].udata ); //silk__spawn( (silk__frame*)evList[i].udata );
+                silk::demo_runtime_4_2::schedule( (silk::demo_runtime_4_2::frame*)evList[i].udata ); //spawn( (silk::demo_runtime_4_2::frame*)evList[i].udata );
             }  else if (evList[i].filter == EVFILT_READ) {
-                silk__io_read_awaitable* frame = (silk__io_read_awaitable*) evList[i].udata;
+                silk::demo_runtime_4_2::io_read_awaitable* frame = (silk::demo_runtime_4_2::io_read_awaitable*) evList[i].udata;
 
                 memset(frame->buf, 0, frame->nbytes);
 
                 frame->n = evList[i].flags & EV_EOF ? 0 : read(evList[i].ident, frame->buf, frame->nbytes);
 
-                silk__spawn(frame->coro);
+                silk::demo_runtime_4_2::spawn(frame->coro);
             }
         }
     }
